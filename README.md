@@ -1,1 +1,1 @@
-# figma-react-component-generator
+# figma-to-react
