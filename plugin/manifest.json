@@ -8,22 +8,10 @@
   "enableProposedApi": false,
   "editorType": ["figma", "figjam"],
   "networkAccess": {
-    "allowedDomains": ["localhost", "127.0.0.1"],
+    "allowedDomains": ["none"],
     "devAllowedDomains": ["*"]
   },
   "permissions": ["currentuser"],
-  "parameters": [
-    {
-      "name": "Server URL",
-      "key": "serverUrl",
-      "description": "URL of the bridge server"
-    },
-    {
-      "name": "API Key",
-      "key": "apiKey",
-      "description": "API key for authentication"
-    }
-  ],
   "menu": [
     {
       "name": "Send to React Bridge",
