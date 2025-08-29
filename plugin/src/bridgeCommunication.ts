@@ -34,7 +34,15 @@ export async function sendToBridgeServer(
       throw new Error(`HTTP ${response.status}: ${errorText}`);
     }
 
-    return await response.json();
+    const serverResponse = await response.json();
+
+    // Transform server response format to match BridgeResponse interface
+    return {
+      success: serverResponse.success,
+      sessionId: serverResponse.data?.sessionId,
+      componentCount: serverResponse.data?.componentCount,
+      error: serverResponse.error,
+    };
   } catch (error) {
     console.error("Network error:", error);
     const errorMessage = error instanceof Error ? error.message : String(error);

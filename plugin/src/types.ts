@@ -159,6 +159,15 @@ export interface BridgeResponse {
   error?: string;
 }
 
+// Server response format (for reference)
+export interface ServerResponse<T = unknown> {
+  success: boolean;
+  data?: T;
+  error?: string;
+  message?: string;
+  timestamp: string;
+}
+
 export interface TestConnectionData {
   serverUrl: string;
   apiKey: string;

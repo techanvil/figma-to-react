@@ -668,7 +668,9 @@
 
         showAlert(
           "success",
-          `✅ ${data.message} (${data.componentCount} components)`
+          `✅ ${data.message} (${data.componentCount} ${
+            data.componentCount === 1 ? "component" : "components"
+          })`
         );
 
         // Re-enable send button
