@@ -1,14 +1,34 @@
 // Figma Plugin Main Code
 // This code runs in the main thread and has access to the Figma API
 
+// Type definitions
+interface BridgeConfig {
+  serverUrl: string;
+  wsUrl: string;
+  apiKey: string;
+  autoConnect: boolean;
+}
+
+interface UIMessage {
+  type: string;
+  data?: any;
+}
+
+interface ComponentData {
+  id: string;
+  name: string;
+  type: string;
+  [key: string]: any;
+}
+
 console.log("Figma to React Bridge Plugin loaded");
 
 // Plugin state
-let isUIOpen = false;
-let websocketConnection = null;
+let isUIOpen: boolean = false;
+let websocketConnection: WebSocket | null = null;
 
 // Default configuration
-const DEFAULT_CONFIG = {
+const DEFAULT_CONFIG: BridgeConfig = {
   serverUrl: "http://localhost:3001",
   wsUrl: "ws://localhost:3002",
   apiKey: "",
@@ -16,7 +36,7 @@ const DEFAULT_CONFIG = {
 };
 
 // Initialize plugin
-async function initialize() {
+async function initialize(): Promise<void> {
   // Load saved configuration
   const config = await loadConfiguration();
 
@@ -27,7 +47,7 @@ async function initialize() {
 }
 
 // Configuration management
-async function loadConfiguration() {
+async function loadConfiguration(): Promise<BridgeConfig> {
   try {
     const savedConfig = await figma.clientStorage.getAsync("bridgeConfig");
     return Object.assign({}, DEFAULT_CONFIG, savedConfig);
@@ -37,7 +57,7 @@ async function loadConfiguration() {
   }
 }
 
-async function saveConfiguration(config) {
+async function saveConfiguration(config: BridgeConfig): Promise<boolean> {
   try {
     await figma.clientStorage.setAsync("bridgeConfig", config);
     console.log("Configuration saved");
