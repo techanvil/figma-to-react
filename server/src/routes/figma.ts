@@ -77,6 +77,27 @@ router.post(
 );
 
 /**
+ * GET /api/figma/search?q=<query>&limit=<number>
+ * Search components by custom name
+ */
+router.get("/search", asyncHandler(figmaController.searchComponentsByName));
+
+/**
+ * GET /api/figma/names
+ * Get all indexed custom names
+ */
+router.get("/names", asyncHandler(figmaController.getCustomNames));
+
+/**
+ * PUT /api/figma/sessions/:sessionId/components/:componentId/name
+ * Update component custom name
+ */
+router.put(
+  "/sessions/:sessionId/components/:componentId/name",
+  asyncHandler(figmaController.updateComponentName)
+);
+
+/**
  * WebSocket endpoint info
  */
 router.get("/websocket/info", (req: Request, res: Response) => {

@@ -56,6 +56,7 @@ export interface ExtendedWebSocket extends WebSocket {
 export interface FigmaNode {
   id: string;
   name: string;
+  customName?: string; // User-assigned name for easier reasoning
   type: string;
   children?: FigmaNode[];
   [key: string]: unknown;

@@ -55,14 +55,28 @@ export function getSelectionData(): SelectionData {
  * Extract comprehensive node data
  */
 export function extractNodeData(node: SceneNode): ComponentData {
+  // Check for stored custom name in plugin data
+  const pluginData = node.getPluginData("figma-to-react-bridge");
+  let customName: string | undefined = undefined;
+
+  try {
+    if (pluginData) {
+      const parsed = JSON.parse(pluginData);
+      customName = parsed.customName || undefined;
+    }
+  } catch (error) {
+    console.warn("Error parsing plugin data for custom name:", error);
+  }
+
   const baseData: ComponentData = {
     id: node.id,
     name: node.name,
+    customName,
     type: node.type,
     visible: node.visible,
     locked: node.locked,
     removed: node.removed,
-    pluginData: node.getPluginData("figma-to-react-bridge") || null,
+    pluginData: pluginData,
   };
 
   // Add bounding box if available
@@ -299,4 +313,44 @@ export function extractEffectData(effect: Effect): EffectData {
   }
 
   return effectData;
+}
+
+/**
+ * Save custom names to Figma nodes
+ */
+export function saveCustomNamesToNodes(components: ComponentData[]): void {
+  components.forEach((componentData) => {
+    const node = figma.getNodeById(componentData.id) as SceneNode;
+    if (node && componentData.customName) {
+      try {
+        // Get existing plugin data or create new
+        const existingData = node.getPluginData("figma-to-react-bridge");
+        let pluginData: any = {};
+
+        if (existingData) {
+          try {
+            pluginData = JSON.parse(existingData);
+          } catch (error) {
+            console.warn("Error parsing existing plugin data:", error);
+          }
+        }
+
+        // Update custom name
+        pluginData.customName = componentData.customName;
+        pluginData.lastUpdated = new Date().toISOString();
+
+        // Save back to node
+        node.setPluginData("figma-to-react-bridge", JSON.stringify(pluginData));
+
+        console.log(
+          `Saved custom name "${componentData.customName}" for node ${node.name}`
+        );
+      } catch (error) {
+        console.error(
+          `Error saving custom name for node ${componentData.id}:`,
+          error
+        );
+      }
+    }
+  });
 }

@@ -5,9 +5,10 @@ import {
   BridgeConfig,
   TestConnectionData,
   BridgePayload,
+  ComponentData,
 } from "./types";
 import { loadConfiguration, saveConfiguration } from "./config";
-import { getSelectionData } from "./dataExtraction";
+import { getSelectionData, saveCustomNamesToNodes } from "./dataExtraction";
 import { sendToBridgeServer, testConnection } from "./bridgeCommunication";
 import { sendToUI, closeUI } from "./uiManager";
 import { generateSessionId } from "./utils";
@@ -26,7 +27,9 @@ export async function handleUIMessage(msg: UIMessage): Promise<void> {
       break;
 
     case "send-to-bridge":
-      await handleSendToBridge(data as { sessionId?: string });
+      await handleSendToBridge(
+        data as { sessionId?: string; components?: ComponentData[] }
+      );
       break;
 
     case "save-config":
@@ -61,10 +64,13 @@ function handleGetSelection(): void {
 /**
  * Handle send to bridge request
  */
-async function handleSendToBridge(data: { sessionId?: string }): Promise<void> {
+async function handleSendToBridge(data: {
+  sessionId?: string;
+  components?: ComponentData[];
+}): Promise<void> {
   try {
     const config = await loadConfiguration();
-    const selectionData = getSelectionData();
+    let selectionData = getSelectionData();
 
     if (!selectionData.hasSelection) {
       sendToUI("error", {
@@ -72,6 +78,18 @@ async function handleSendToBridge(data: { sessionId?: string }): Promise<void> {
         type: "selection-error",
       });
       return;
+    }
+
+    // If components with custom names are provided from UI, use those
+    if (data.components && data.components.length > 0) {
+      // Save custom names to Figma nodes
+      saveCustomNamesToNodes(data.components);
+
+      // Update selection data with custom names
+      selectionData = {
+        ...selectionData,
+        components: data.components,
+      };
     }
 
     sendToUI("sending-to-bridge", {

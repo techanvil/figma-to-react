@@ -16,6 +16,7 @@ export interface UIMessage {
 export interface ComponentData {
   id: string;
   name: string;
+  customName?: string; // User-assigned name for easier reasoning
   type: string;
   visible: boolean;
   locked: boolean;

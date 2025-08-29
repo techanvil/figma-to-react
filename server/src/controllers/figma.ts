@@ -5,6 +5,7 @@ import { broadcastToSession } from "@/websocket/server.js";
 import figmaTransformer from "@/services/figmaTransformer.js";
 import designTokenExtractor from "@/services/designTokenExtractor.js";
 import componentAnalyzer from "@/services/componentAnalyzer.js";
+import componentNameIndex from "@/services/componentNameIndex.js";
 import type {
   FigmaNode,
   SessionData,
@@ -81,6 +82,9 @@ export const receiveComponents = async (
     };
 
     componentData.set(sessionId, componentEntry);
+
+    // Index components by custom names
+    componentNameIndex.indexComponents(sessionId, components);
 
     // Update session info
     if (!sessions.has(sessionId)) {
@@ -294,6 +298,9 @@ export const deleteSession = async (
     componentData.delete(sessionId);
     componentData.delete(`${sessionId}-transformed`);
 
+    // Remove from component name index
+    componentNameIndex.removeSessionFromIndex(sessionId);
+
     logger.info("Session deleted", { sessionId });
 
     // Broadcast session deletion
@@ -385,6 +392,166 @@ export const analyzeComponents = async (
   } catch (error) {
     logger.error("Error analyzing components", {
       error: (error as Error).message,
+    });
+    throw error;
+  }
+};
+
+/**
+ * Search components by custom name
+ */
+export const searchComponentsByName = async (
+  req: Request<{}, SuccessResponse, {}, { q: string; limit?: string }>,
+  res: Response<SuccessResponse>
+): Promise<void> => {
+  try {
+    const { q: query, limit } = req.query;
+
+    if (!query || typeof query !== "string") {
+      res.status(400).json({
+        success: false,
+        error: "Query parameter 'q' is required",
+        timestamp: new Date().toISOString(),
+      } as any);
+      return;
+    }
+
+    const searchLimit = limit ? parseInt(limit, 10) : 50;
+    const results = componentNameIndex.searchByCustomName(query);
+
+    // Combine and limit results
+    const allResults = [
+      ...results.exactMatches.map((r) => ({
+        ...r,
+        matchType: "exact" as const,
+      })),
+      ...results.partialMatches.map((r) => ({
+        ...r,
+        matchType: "partial" as const,
+      })),
+    ].slice(0, searchLimit);
+
+    logger.info("Component search by name completed", {
+      query,
+      totalResults: allResults.length,
+      exactMatches: results.exactMatches.length,
+      partialMatches: results.partialMatches.length,
+    });
+
+    res.json({
+      success: true,
+      data: {
+        query,
+        results: allResults,
+        totalCount: allResults.length,
+        exactMatches: results.exactMatches.length,
+        partialMatches: results.partialMatches.length,
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    logger.error("Error searching components by name", {
+      error: (error as Error).message,
+      query: req.query.q,
+    });
+    throw error;
+  }
+};
+
+/**
+ * Get all indexed custom names
+ */
+export const getCustomNames = async (
+  req: Request,
+  res: Response<SuccessResponse>
+): Promise<void> => {
+  try {
+    const customNames = componentNameIndex.getAllCustomNames();
+
+    res.json({
+      success: true,
+      data: {
+        customNames,
+        totalCount: customNames.length,
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    logger.error("Error retrieving custom names", {
+      error: (error as Error).message,
+    });
+    throw error;
+  }
+};
+
+/**
+ * Update component custom name
+ */
+export const updateComponentName = async (
+  req: Request<
+    { sessionId: string; componentId: string },
+    SuccessResponse,
+    { customName: string }
+  >,
+  res: Response<SuccessResponse>
+): Promise<void> => {
+  try {
+    const { sessionId, componentId } = req.params;
+    const { customName } = req.body;
+
+    if (!customName || typeof customName !== "string") {
+      res.status(400).json({
+        success: false,
+        error: "Custom name is required",
+        timestamp: new Date().toISOString(),
+      } as any);
+      return;
+    }
+
+    const success = componentNameIndex.updateComponentCustomName(
+      sessionId,
+      componentId,
+      customName
+    );
+
+    if (!success) {
+      res.status(404).json({
+        success: false,
+        error: "Component not found in session",
+        timestamp: new Date().toISOString(),
+      } as any);
+      return;
+    }
+
+    // Update session activity
+    if (sessions.has(sessionId)) {
+      const session = sessions.get(sessionId)!;
+      session.lastActivity = new Date().toISOString();
+      sessions.set(sessionId, session);
+    }
+
+    logger.info("Component custom name updated", {
+      sessionId,
+      componentId,
+      customName,
+    });
+
+    res.json({
+      success: true,
+      data: {
+        sessionId,
+        componentId,
+        customName,
+        updatedAt: new Date().toISOString(),
+      },
+      message: "Component custom name updated successfully",
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    logger.error("Error updating component custom name", {
+      error: (error as Error).message,
+      sessionId: req.params.sessionId,
+      componentId: req.params.componentId,
     });
     throw error;
   }
