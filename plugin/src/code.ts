@@ -27,6 +27,47 @@ console.log("Figma to React Bridge Plugin loaded");
 let isUIOpen: boolean = false;
 let websocketConnection: WebSocket | null = null;
 
+// Helper function to convert font weight strings to numbers
+function convertFontWeightToNumber(
+  fontWeightStyle?: string
+): number | undefined {
+  if (!fontWeightStyle) return undefined;
+
+  const weightMap: { [key: string]: number } = {
+    Thin: 100,
+    "Extra Light": 200,
+    Light: 300,
+    Regular: 400,
+    Medium: 500,
+    "Semi Bold": 600,
+    Bold: 700,
+    "Extra Bold": 800,
+    Black: 900,
+  };
+
+  // Try direct lookup first
+  if (weightMap[fontWeightStyle]) {
+    return weightMap[fontWeightStyle];
+  }
+
+  // Try case-insensitive lookup
+  const lowerStyle = fontWeightStyle.toLowerCase();
+  for (const [key, value] of Object.entries(weightMap)) {
+    if (key.toLowerCase() === lowerStyle) {
+      return value;
+    }
+  }
+
+  // If it's already a number, parse it
+  const numericWeight = parseInt(fontWeightStyle, 10);
+  if (!isNaN(numericWeight) && numericWeight >= 100 && numericWeight <= 900) {
+    return numericWeight;
+  }
+
+  // Default to regular weight
+  return 400;
+}
+
 // Default configuration
 const DEFAULT_CONFIG: BridgeConfig = {
   serverUrl: "http://localhost:3001",
@@ -175,8 +216,8 @@ function getSelectionData() {
     count: selection.length,
     components,
     metadata: {
-      fileKey: figma.fileKey,
-      fileName: figma.root.name,
+      fileKey: figma.fileKey || "unknown-file-key",
+      fileName: figma.root.name || "Untitled",
       currentPage: {
         id: figma.currentPage.id,
         name: figma.currentPage.name,
@@ -271,7 +312,7 @@ function extractNodeData(node) {
       baseData.style = {
         fontFamily: node.fontName?.family,
         fontSize: typeof node.fontSize === "number" ? node.fontSize : undefined,
-        fontWeight: node.fontName?.style,
+        fontWeight: convertFontWeightToNumber(node.fontName?.style),
         lineHeightPx:
           typeof node.lineHeight === "object"
             ? node.lineHeight.value
@@ -423,6 +464,9 @@ async function handleSendToBridge(data) {
       timestamp: new Date().toISOString(),
       pluginVersion: "1.0.0",
     };
+
+    // Debug logging
+    console.log("Payload metadata:", JSON.stringify(payload.metadata, null, 2));
 
     sendToUI("sending-to-bridge", {
       status: "sending",

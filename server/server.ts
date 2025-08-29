@@ -51,14 +51,42 @@ app.use(
 // CORS configuration
 const corsOptions: cors.CorsOptions = {
   origin: (origin, callback) => {
-    if (!origin || config.allowedOrigins.includes(origin)) {
+    // Allow requests with no origin (like Figma plugins, Postman, etc.)
+    if (!origin) {
       callback(null, true);
-    } else {
-      callback(new Error("Not allowed by CORS"));
+      return;
     }
+
+    // Allow configured origins
+    if (config.allowedOrigins.includes(origin)) {
+      callback(null, true);
+      return;
+    }
+
+    // Allow file:// origins (for local development)
+    if (origin.startsWith("file://")) {
+      callback(null, true);
+      return;
+    }
+
+    // For development, be more permissive
+    if (config.nodeEnv === "development") {
+      callback(null, true);
+      return;
+    }
+
+    // Reject other origins in production
+    callback(new Error("Not allowed by CORS"));
   },
   credentials: true,
   optionsSuccessStatus: 200,
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: [
+    "Content-Type",
+    "Authorization",
+    "X-API-Key",
+    "X-Requested-With",
+  ],
 };
 
 app.use(cors(corsOptions));
