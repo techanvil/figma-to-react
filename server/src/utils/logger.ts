@@ -1,8 +1,14 @@
-const winston = require("winston");
-const path = require("path");
+import winston from "winston";
+import path from "path";
+import fs from "fs";
+import { fileURLToPath } from "url";
+import type { LogMeta } from "@/types/index.js";
+
+// Get current directory in ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Create logs directory if it doesn't exist
-const fs = require("fs");
 const logDir = path.join(__dirname, "../../logs");
 if (!fs.existsSync(logDir)) {
   fs.mkdirSync(logDir, { recursive: true });
@@ -20,9 +26,9 @@ const logFormat = winston.format.combine(
 
 // Create logger instance
 const logger = winston.createLogger({
-  level: process.env.LOG_LEVEL || "info",
+  level: process.env.LOG_LEVEL ?? "info",
   format: logFormat,
-  defaultMeta: { service: "figma-bridge-server" },
+  defaultMeta: { service: "figma-bridge-server" } satisfies LogMeta,
   transports: [
     // Write all logs with level 'error' and below to error.log
     new winston.transports.File({
@@ -48,13 +54,13 @@ if (process.env.NODE_ENV !== "production") {
         winston.format.colorize(),
         winston.format.simple(),
         winston.format.printf(({ timestamp, level, message, ...meta }) => {
-          return `${timestamp} [${level}]: ${message} ${
-            Object.keys(meta).length ? JSON.stringify(meta, null, 2) : ""
-          }`;
+          const metaStr =
+            Object.keys(meta).length > 0 ? JSON.stringify(meta, null, 2) : "";
+          return `${timestamp} [${level}]: ${message} ${metaStr}`;
         })
       ),
     })
   );
 }
 
-module.exports = logger;
+export default logger;

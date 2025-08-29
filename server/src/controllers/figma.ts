@@ -1,24 +1,74 @@
-const { v4: uuidv4 } = require("uuid");
-const logger = require("../utils/logger");
-const { broadcastToSession } = require("../websocket/server");
-const figmaTransformer = require("../services/figmaTransformer");
-const designTokenExtractor = require("../services/designTokenExtractor");
-const componentAnalyzer = require("../services/componentAnalyzer");
+import { v4 as uuidv4 } from "uuid";
+import type { Request, Response } from "express";
+import logger from "@/utils/logger.js";
+import { broadcastToSession } from "@/websocket/server.js";
+import figmaTransformer from "@/services/figmaTransformer.js";
+import designTokenExtractor from "@/services/designTokenExtractor.js";
+import componentAnalyzer from "@/services/componentAnalyzer.js";
+import type {
+  FigmaNode,
+  SessionData,
+  ComponentEntry,
+  TransformEntry,
+  TransformOptions,
+  SuccessResponse,
+  ErrorResponse,
+} from "@/types/index.js";
 
 // In-memory storage for demo (replace with Redis/Database in production)
-const sessions = new Map();
-const componentData = new Map();
+const sessions = new Map<string, SessionData>();
+const componentData = new Map<string, ComponentEntry | TransformEntry>();
+
+interface ReceiveComponentsRequest {
+  components: FigmaNode[];
+  metadata: ComponentEntry["metadata"];
+  sessionId?: string;
+}
+
+interface TransformRequest {
+  components: FigmaNode[];
+  sessionId?: string;
+  options?: Partial<TransformOptions>;
+}
+
+interface ExtractTokensRequest {
+  components: FigmaNode[];
+  sessionId?: string;
+  options?: Record<string, unknown>;
+}
+
+interface AnalyzeRequest {
+  components: FigmaNode[];
+  sessionId?: string;
+}
 
 /**
  * Receive and store component data from Figma plugin
  */
-const receiveComponents = async (req, res) => {
+export const receiveComponents = async (
+  req: Request<
+    {},
+    SuccessResponse<{
+      sessionId: string;
+      componentId: string;
+      componentCount: number;
+    }>,
+    ReceiveComponentsRequest
+  >,
+  res: Response<
+    SuccessResponse<{
+      sessionId: string;
+      componentId: string;
+      componentCount: number;
+    }>
+  >
+): Promise<void> => {
   try {
     const { components, metadata, sessionId: providedSessionId } = req.body;
-    const sessionId = providedSessionId || uuidv4();
+    const sessionId = providedSessionId ?? uuidv4();
 
     // Store component data
-    const componentEntry = {
+    const componentEntry: ComponentEntry = {
       id: uuidv4(),
       sessionId,
       components,
@@ -41,38 +91,42 @@ const receiveComponents = async (req, res) => {
         status: "active",
       });
     } else {
-      const session = sessions.get(sessionId);
+      const session = sessions.get(sessionId)!;
       session.lastActivity = new Date().toISOString();
       sessions.set(sessionId, session);
     }
 
     logger.info("Components received from Figma", {
       sessionId,
-      componentCount: components?.length || 0,
+      componentCount: components?.length ?? 0,
       metadata,
     });
 
     // Broadcast to WebSocket clients
     broadcastToSession(sessionId, {
       type: "components-received",
-      data: {
+      payload: {
         sessionId,
-        componentCount: components?.length || 0,
+        componentCount: components?.length ?? 0,
         timestamp: new Date().toISOString(),
       },
+      timestamp: Date.now(),
     });
 
     res.status(201).json({
       success: true,
-      sessionId,
-      componentId: componentEntry.id,
+      data: {
+        sessionId,
+        componentId: componentEntry.id,
+        componentCount: components?.length ?? 0,
+      },
       message: "Components received successfully",
-      componentCount: components?.length || 0,
+      timestamp: new Date().toISOString(),
     });
   } catch (error) {
     logger.error("Error receiving components", {
-      error: error.message,
-      stack: error.stack,
+      error: (error as Error).message,
+      stack: (error as Error).stack,
     });
     throw error;
   }
@@ -81,22 +135,27 @@ const receiveComponents = async (req, res) => {
 /**
  * Get stored component data by session ID
  */
-const getComponents = async (req, res) => {
+export const getComponents = async (
+  req: Request<{ sessionId: string }>,
+  res: Response<SuccessResponse<ComponentEntry> | ErrorResponse>
+): Promise<void> => {
   try {
     const { sessionId } = req.params;
 
     if (!componentData.has(sessionId)) {
-      return res.status(404).json({
+      res.status(404).json({
         error: "Session not found",
         message: `No component data found for session: ${sessionId}`,
+        timestamp: new Date().toISOString(),
       });
+      return;
     }
 
-    const data = componentData.get(sessionId);
+    const data = componentData.get(sessionId) as ComponentEntry;
 
     // Update session activity
     if (sessions.has(sessionId)) {
-      const session = sessions.get(sessionId);
+      const session = sessions.get(sessionId)!;
       session.lastActivity = new Date().toISOString();
       sessions.set(sessionId, session);
     }
@@ -106,11 +165,11 @@ const getComponents = async (req, res) => {
     res.json({
       success: true,
       data,
-      retrievedAt: new Date().toISOString(),
+      timestamp: new Date().toISOString(),
     });
   } catch (error) {
     logger.error("Error retrieving components", {
-      error: error.message,
+      error: (error as Error).message,
       sessionId: req.params.sessionId,
     });
     throw error;
@@ -120,30 +179,33 @@ const getComponents = async (req, res) => {
 /**
  * Transform Figma data to React component structure
  */
-const transformToReact = async (req, res) => {
+export const transformToReact = async (
+  req: Request<{}, SuccessResponse, TransformRequest>,
+  res: Response<SuccessResponse>
+): Promise<void> => {
   try {
     const { components, options = {} } = req.body;
-    const sessionId = req.body.sessionId || uuidv4();
+    const sessionId = req.body.sessionId ?? uuidv4();
 
     logger.info("Starting React transformation", {
       sessionId,
-      componentCount: components?.length || 0,
+      componentCount: components?.length ?? 0,
       options,
     });
 
     // Transform components using the transformer service
     const transformedComponents = await figmaTransformer.transformComponents(
       components,
-      options
+      options as TransformOptions
     );
 
     // Store transformed data
-    const transformEntry = {
+    const transformEntry: TransformEntry = {
       id: uuidv4(),
       sessionId,
       originalComponents: components,
       transformedComponents,
-      options,
+      options: options as TransformOptions,
       transformedAt: new Date().toISOString(),
     };
 
@@ -152,11 +214,12 @@ const transformToReact = async (req, res) => {
     // Broadcast transformation complete
     broadcastToSession(sessionId, {
       type: "transformation-complete",
-      data: {
+      payload: {
         sessionId,
         componentCount: transformedComponents.length,
         timestamp: new Date().toISOString(),
       },
+      timestamp: Date.now(),
     });
 
     logger.info("React transformation completed", {
@@ -166,18 +229,21 @@ const transformToReact = async (req, res) => {
 
     res.json({
       success: true,
-      sessionId,
-      transformedComponents,
-      metadata: {
-        originalCount: components?.length || 0,
-        transformedCount: transformedComponents.length,
-        transformedAt: transformEntry.transformedAt,
+      data: {
+        sessionId,
+        transformedComponents,
+        metadata: {
+          originalCount: components?.length ?? 0,
+          transformedCount: transformedComponents.length,
+          transformedAt: transformEntry.transformedAt,
+        },
       },
+      timestamp: new Date().toISOString(),
     });
   } catch (error) {
     logger.error("Error transforming to React", {
-      error: error.message,
-      stack: error.stack,
+      error: (error as Error).message,
+      stack: (error as Error).stack,
     });
     throw error;
   }
@@ -186,7 +252,10 @@ const transformToReact = async (req, res) => {
 /**
  * Get all active sessions
  */
-const getSessions = async (req, res) => {
+export const getSessions = async (
+  req: Request,
+  res: Response<SuccessResponse>
+): Promise<void> => {
   try {
     const activeSessions = Array.from(sessions.values()).map((session) => ({
       ...session,
@@ -196,11 +265,16 @@ const getSessions = async (req, res) => {
 
     res.json({
       success: true,
-      sessions: activeSessions,
-      totalCount: activeSessions.length,
+      data: {
+        sessions: activeSessions,
+        totalCount: activeSessions.length,
+      },
+      timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    logger.error("Error retrieving sessions", { error: error.message });
+    logger.error("Error retrieving sessions", {
+      error: (error as Error).message,
+    });
     throw error;
   }
 };
@@ -208,7 +282,10 @@ const getSessions = async (req, res) => {
 /**
  * Delete a session and its associated data
  */
-const deleteSession = async (req, res) => {
+export const deleteSession = async (
+  req: Request<{ sessionId: string }>,
+  res: Response<SuccessResponse>
+): Promise<void> => {
   try {
     const { sessionId } = req.params;
 
@@ -222,16 +299,18 @@ const deleteSession = async (req, res) => {
     // Broadcast session deletion
     broadcastToSession(sessionId, {
       type: "session-deleted",
-      data: { sessionId, timestamp: new Date().toISOString() },
+      payload: { sessionId, timestamp: new Date().toISOString() },
+      timestamp: Date.now(),
     });
 
     res.json({
       success: true,
       message: `Session ${sessionId} deleted successfully`,
+      timestamp: new Date().toISOString(),
     });
   } catch (error) {
     logger.error("Error deleting session", {
-      error: error.message,
+      error: (error as Error).message,
       sessionId: req.params.sessionId,
     });
     throw error;
@@ -241,14 +320,17 @@ const deleteSession = async (req, res) => {
 /**
  * Extract design tokens from Figma data
  */
-const extractDesignTokens = async (req, res) => {
+export const extractDesignTokens = async (
+  req: Request<{}, SuccessResponse, ExtractTokensRequest>,
+  res: Response<SuccessResponse>
+): Promise<void> => {
   try {
     const { components, options = {} } = req.body;
-    const sessionId = req.body.sessionId || uuidv4();
+    const sessionId = req.body.sessionId ?? uuidv4();
 
     logger.info("Extracting design tokens", {
       sessionId,
-      componentCount: components?.length || 0,
+      componentCount: components?.length ?? 0,
     });
 
     const designTokens = await designTokenExtractor.extract(
@@ -258,12 +340,17 @@ const extractDesignTokens = async (req, res) => {
 
     res.json({
       success: true,
-      sessionId,
-      designTokens,
-      extractedAt: new Date().toISOString(),
+      data: {
+        sessionId,
+        designTokens,
+        extractedAt: new Date().toISOString(),
+      },
+      timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    logger.error("Error extracting design tokens", { error: error.message });
+    logger.error("Error extracting design tokens", {
+      error: (error as Error).message,
+    });
     throw error;
   }
 };
@@ -271,36 +358,34 @@ const extractDesignTokens = async (req, res) => {
 /**
  * Analyze components for React generation patterns
  */
-const analyzeComponents = async (req, res) => {
+export const analyzeComponents = async (
+  req: Request<{}, SuccessResponse, AnalyzeRequest>,
+  res: Response<SuccessResponse>
+): Promise<void> => {
   try {
     const { components } = req.body;
-    const sessionId = req.body.sessionId || uuidv4();
+    const sessionId = req.body.sessionId ?? uuidv4();
 
     logger.info("Analyzing components", {
       sessionId,
-      componentCount: components?.length || 0,
+      componentCount: components?.length ?? 0,
     });
 
     const analysis = await componentAnalyzer.analyze(components);
 
     res.json({
       success: true,
-      sessionId,
-      analysis,
-      analyzedAt: new Date().toISOString(),
+      data: {
+        sessionId,
+        analysis,
+        analyzedAt: new Date().toISOString(),
+      },
+      timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    logger.error("Error analyzing components", { error: error.message });
+    logger.error("Error analyzing components", {
+      error: (error as Error).message,
+    });
     throw error;
   }
-};
-
-module.exports = {
-  receiveComponents,
-  getComponents,
-  transformToReact,
-  getSessions,
-  deleteSession,
-  extractDesignTokens,
-  analyzeComponents,
 };

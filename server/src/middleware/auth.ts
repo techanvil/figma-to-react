@@ -1,16 +1,24 @@
-const logger = require("../utils/logger");
+import type { Request, Response, NextFunction } from "express";
+import logger from "@/utils/logger.js";
+import type { AuthenticatedRequest, ErrorResponse } from "@/types/index.js";
 
 /**
  * Middleware to validate API key
  */
-const validateApiKey = (req, res, next) => {
-  const apiKey = req.headers["x-api-key"] || req.query.apiKey;
+export const validateApiKey = (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+): void => {
+  const apiKey =
+    (req.headers["x-api-key"] as string) ?? (req.query.apiKey as string);
   const expectedApiKey = process.env.API_KEY;
 
   // Skip API key validation in development if not set
   if (process.env.NODE_ENV === "development" && !expectedApiKey) {
     logger.warn("API key validation skipped in development mode");
-    return next();
+    next();
+    return;
   }
 
   if (!apiKey) {
@@ -18,11 +26,16 @@ const validateApiKey = (req, res, next) => {
       ip: req.ip,
       path: req.path,
     });
-    return res.status(401).json({
+
+    const response: ErrorResponse = {
       error: "API key required",
       message:
         "Please provide a valid API key in the x-api-key header or apiKey query parameter",
-    });
+      timestamp: new Date().toISOString(),
+    };
+
+    res.status(401).json(response);
+    return;
   }
 
   if (apiKey !== expectedApiKey) {
@@ -31,23 +44,35 @@ const validateApiKey = (req, res, next) => {
       path: req.path,
       providedKey: apiKey.substring(0, 8) + "...", // Log partial key for debugging
     });
-    return res.status(401).json({
+
+    const response: ErrorResponse = {
       error: "Invalid API key",
       message: "The provided API key is not valid",
-    });
+      timestamp: new Date().toISOString(),
+    };
+
+    res.status(401).json(response);
+    return;
   }
 
   logger.debug("API key validation successful", {
     ip: req.ip,
     path: req.path,
   });
+
+  // Add API key to request for downstream middleware
+  req.apiKey = apiKey;
   next();
 };
 
 /**
  * Middleware to validate Figma plugin origin
  */
-const validateFigmaOrigin = (req, res, next) => {
+export const validateFigmaOrigin = (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): void => {
   const origin = req.headers.origin;
   const figmaOrigins = ["https://www.figma.com", "https://figma.com"];
 
@@ -56,7 +81,8 @@ const validateFigmaOrigin = (req, res, next) => {
     process.env.NODE_ENV === "development" &&
     (origin?.includes("localhost") || !origin)
   ) {
-    return next();
+    next();
+    return;
   }
 
   if (!origin || !figmaOrigins.includes(origin)) {
@@ -64,16 +90,16 @@ const validateFigmaOrigin = (req, res, next) => {
       origin,
       ip: req.ip,
     });
-    return res.status(403).json({
+
+    const response: ErrorResponse = {
       error: "Forbidden",
       message: "Request must originate from Figma",
-    });
+      timestamp: new Date().toISOString(),
+    };
+
+    res.status(403).json(response);
+    return;
   }
 
   next();
-};
-
-module.exports = {
-  validateApiKey,
-  validateFigmaOrigin,
 };

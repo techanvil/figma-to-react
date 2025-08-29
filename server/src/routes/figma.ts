@@ -1,13 +1,13 @@
-const express = require("express");
-const router = express.Router();
-const { asyncHandler } = require("../middleware/error");
-const {
+import express from "express";
+import type { Request, Response } from "express";
+import { asyncHandler, handleValidationError } from "@/middleware/error.js";
+import {
   validateFigmaData,
   validateComponentRequest,
-} = require("../validators/figma");
-const { handleValidationError } = require("../middleware/error");
-const figmaController = require("../controllers/figma");
-const logger = require("../utils/logger");
+} from "@/validators/figma.js";
+import * as figmaController from "@/controllers/figma.js";
+
+const router = express.Router();
 
 // Apply validation error handler
 router.use(handleValidationError);
@@ -57,7 +57,7 @@ router.delete(
 );
 
 /**
- * POST /api/figma/extract
+ * POST /api/figma/extract/tokens
  * Extract design tokens from Figma data
  */
 router.post(
@@ -79,13 +79,13 @@ router.post(
 /**
  * WebSocket endpoint info
  */
-router.get("/websocket/info", (req, res) => {
+router.get("/websocket/info", (req: Request, res: Response) => {
   res.json({
-    websocketUrl: `ws://localhost:${process.env.WS_PORT || 3002}`,
+    websocketUrl: `ws://localhost:${process.env.WS_PORT ?? "3002"}`,
     protocols: ["figma-bridge"],
     connectionInfo:
       "Connect with session ID as query parameter: ?sessionId=your-session-id",
   });
 });
 
-module.exports = router;
+export default router;

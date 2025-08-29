@@ -1,22 +1,42 @@
 # Use Node.js LTS version
-FROM node:18-alpine
-
-# Set working directory
-WORKDIR /app
+FROM node:18-alpine AS base
 
 # Install system dependencies
-RUN apk add --no-cache \
-    curl \
-    ca-certificates
+RUN apk add --no-cache curl ca-certificates
+
+# Build stage
+FROM base AS build
+
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+COPY tsconfig*.json ./
+COPY tsup.config.ts ./
+
+# Install all dependencies (including dev dependencies for build)
+RUN npm ci
+
+# Copy source code
+COPY src/ ./src/
+COPY server.ts ./
+
+# Build the TypeScript application
+RUN npm run build
+
+# Production stage
+FROM base AS production
+
+WORKDIR /app
 
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies
+# Install only production dependencies
 RUN npm ci --only=production && npm cache clean --force
 
-# Copy source code
-COPY . .
+# Copy built application from build stage
+COPY --from=build /app/dist ./dist
 
 # Create logs directory
 RUN mkdir -p logs

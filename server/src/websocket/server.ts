@@ -1,21 +1,23 @@
-const WebSocket = require("ws");
-const { v4: uuidv4 } = require("uuid");
-const logger = require("../utils/logger");
+import WebSocket, { WebSocketServer } from "ws";
+import { v4 as uuidv4 } from "uuid";
+import type { Server, IncomingMessage } from "http";
+import logger from "@/utils/logger.js";
+import type { ExtendedWebSocket, WebSocketMessage } from "@/types/index.js";
 
-let wss = null;
-const clients = new Map(); // sessionId -> Set of WebSocket connections
+let wss: WebSocketServer | null = null;
+const clients = new Map<string, Set<ExtendedWebSocket>>(); // sessionId -> Set of WebSocket connections
 
 /**
  * Start WebSocket server
  */
-const start = (httpServer) => {
-  const WS_PORT = process.env.WS_PORT || 3002;
+export const start = (httpServer: Server): void => {
+  const WS_PORT = parseInt(process.env.WS_PORT ?? "3002", 10);
 
-  wss = new WebSocket.Server({
+  wss = new WebSocketServer({
     port: WS_PORT,
-    verifyClient: (info) => {
+    verifyClient: (info: { origin: string; req: IncomingMessage }) => {
       // Basic verification - could be enhanced with auth
-      const url = new URL(info.req.url, `http://${info.req.headers.host}`);
+      const url = new URL(info.req.url!, `http://${info.req.headers.host!}`);
       const sessionId = url.searchParams.get("sessionId");
 
       if (!sessionId) {
@@ -30,49 +32,50 @@ const start = (httpServer) => {
     },
   });
 
-  wss.on("connection", (ws, req) => {
-    const url = new URL(req.url, `http://${req.headers.host}`);
-    const sessionId = url.searchParams.get("sessionId");
+  wss.on("connection", (ws: ExtendedWebSocket, req: IncomingMessage) => {
+    const url = new URL(req.url!, `http://${req.headers.host!}`);
+    const sessionId = url.searchParams.get("sessionId")!;
     const clientId = uuidv4();
 
     // Store client connection
     if (!clients.has(sessionId)) {
       clients.set(sessionId, new Set());
     }
-    clients.get(sessionId).add(ws);
+    clients.get(sessionId)!.add(ws);
 
     // Add client metadata
     ws.sessionId = sessionId;
-    ws.clientId = clientId;
-    ws.connectedAt = new Date().toISOString();
+    ws.id = clientId;
+    ws.isAlive = true;
 
     logger.info("WebSocket client connected", {
       sessionId,
       clientId,
-      clientCount: clients.get(sessionId).size,
+      clientCount: clients.get(sessionId)!.size,
     });
 
     // Send welcome message
     ws.send(
       JSON.stringify({
         type: "connection-established",
-        data: {
+        payload: {
           clientId,
           sessionId,
-          connectedAt: ws.connectedAt,
+          connectedAt: new Date().toISOString(),
           server: "figma-bridge-server",
         },
-      })
+        timestamp: Date.now(),
+      } satisfies WebSocketMessage)
     );
 
     // Handle incoming messages
     ws.on("message", (data) => {
       try {
-        const message = JSON.parse(data.toString());
+        const message = JSON.parse(data.toString()) as WebSocketMessage;
         handleMessage(ws, message);
       } catch (error) {
         logger.error("Error parsing WebSocket message", {
-          error: error.message,
+          error: (error as Error).message,
           sessionId,
           clientId,
           rawData: data.toString(),
@@ -81,9 +84,11 @@ const start = (httpServer) => {
         ws.send(
           JSON.stringify({
             type: "error",
-            error: "Invalid message format",
-            timestamp: new Date().toISOString(),
-          })
+            payload: {
+              error: "Invalid message format",
+            },
+            timestamp: Date.now(),
+          } satisfies WebSocketMessage)
         );
       }
     });
@@ -99,8 +104,8 @@ const start = (httpServer) => {
 
       // Remove client from session
       if (clients.has(sessionId)) {
-        clients.get(sessionId).delete(ws);
-        if (clients.get(sessionId).size === 0) {
+        clients.get(sessionId)!.delete(ws);
+        if (clients.get(sessionId)!.size === 0) {
           clients.delete(sessionId);
         }
       }
@@ -114,11 +119,34 @@ const start = (httpServer) => {
         clientId,
       });
     });
+
+    // Handle pong responses for heartbeat
+    ws.on("pong", () => {
+      ws.isAlive = true;
+    });
   });
 
   // Handle server events
-  wss.on("error", (error) => {
+  wss.on("error", (error: Error) => {
     logger.error("WebSocket server error", { error: error.message });
+  });
+
+  // Heartbeat interval to detect broken connections
+  const heartbeatInterval = setInterval(() => {
+    if (wss) {
+      wss.clients.forEach((ws: ExtendedWebSocket) => {
+        if (!ws.isAlive) {
+          ws.terminate();
+          return;
+        }
+        ws.isAlive = false;
+        ws.ping();
+      });
+    }
+  }, 30000);
+
+  wss.on("close", () => {
+    clearInterval(heartbeatInterval);
   });
 
   logger.info(`WebSocket server started on port ${WS_PORT}`);
@@ -127,13 +155,16 @@ const start = (httpServer) => {
 /**
  * Handle incoming WebSocket messages
  */
-const handleMessage = (ws, message) => {
-  const { type, data } = message;
+const handleMessage = (
+  ws: ExtendedWebSocket,
+  message: WebSocketMessage
+): void => {
+  const { type, payload } = message;
 
   logger.debug("WebSocket message received", {
     type,
     sessionId: ws.sessionId,
-    clientId: ws.clientId,
+    clientId: ws.id,
   });
 
   switch (type) {
@@ -141,8 +172,9 @@ const handleMessage = (ws, message) => {
       ws.send(
         JSON.stringify({
           type: "pong",
-          timestamp: new Date().toISOString(),
-        })
+          payload: {},
+          timestamp: Date.now(),
+        } satisfies WebSocketMessage)
       );
       break;
 
@@ -151,22 +183,26 @@ const handleMessage = (ws, message) => {
       ws.send(
         JSON.stringify({
           type: "subscription-confirmed",
-          data: {
+          payload: {
             sessionId: ws.sessionId,
             subscriptions: ["components", "transformations", "analysis"],
           },
-        })
+          timestamp: Date.now(),
+        } satisfies WebSocketMessage)
       );
       break;
 
     case "figma-plugin-data":
       // Forward data from Figma plugin to other clients
       broadcastToSession(
-        ws.sessionId,
+        ws.sessionId!,
         {
           type: "figma-data-update",
-          data,
-          from: "figma-plugin",
+          payload: {
+            ...(typeof payload === "object" && payload !== null ? payload : {}),
+            from: "figma-plugin",
+          },
+          timestamp: Date.now(),
         },
         ws
       );
@@ -177,13 +213,14 @@ const handleMessage = (ws, message) => {
       ws.send(
         JSON.stringify({
           type: "status-update",
-          data: {
+          payload: {
             sessionId: ws.sessionId,
-            connectedClients: clients.get(ws.sessionId)?.size || 0,
+            connectedClients: clients.get(ws.sessionId!)?.size ?? 0,
             serverUptime: process.uptime(),
             timestamp: new Date().toISOString(),
           },
-        })
+          timestamp: Date.now(),
+        } satisfies WebSocketMessage)
       );
       break;
 
@@ -191,15 +228,17 @@ const handleMessage = (ws, message) => {
       logger.warn("Unknown WebSocket message type", {
         type,
         sessionId: ws.sessionId,
-        clientId: ws.clientId,
+        clientId: ws.id,
       });
 
       ws.send(
         JSON.stringify({
           type: "error",
-          error: `Unknown message type: ${type}`,
-          timestamp: new Date().toISOString(),
-        })
+          payload: {
+            error: `Unknown message type: ${type}`,
+          },
+          timestamp: Date.now(),
+        } satisfies WebSocketMessage)
       );
   }
 };
@@ -207,30 +246,29 @@ const handleMessage = (ws, message) => {
 /**
  * Broadcast message to all clients in a session
  */
-const broadcastToSession = (sessionId, message, excludeClient = null) => {
+export const broadcastToSession = (
+  sessionId: string,
+  message: WebSocketMessage,
+  excludeClient?: ExtendedWebSocket
+): void => {
   if (!clients.has(sessionId)) {
     logger.debug("No clients to broadcast to", { sessionId });
     return;
   }
 
-  const sessionClients = clients.get(sessionId);
+  const sessionClients = clients.get(sessionId)!;
   let sentCount = 0;
 
   sessionClients.forEach((client) => {
     if (client !== excludeClient && client.readyState === WebSocket.OPEN) {
       try {
-        client.send(
-          JSON.stringify({
-            ...message,
-            timestamp: message.timestamp || new Date().toISOString(),
-          })
-        );
+        client.send(JSON.stringify(message));
         sentCount++;
       } catch (error) {
         logger.error("Error sending message to client", {
-          error: error.message,
+          error: (error as Error).message,
           sessionId,
-          clientId: client.clientId,
+          clientId: client.id,
         });
       }
     }
@@ -246,11 +284,20 @@ const broadcastToSession = (sessionId, message, excludeClient = null) => {
 /**
  * Get connection statistics
  */
-const getStats = () => {
+export const getStats = () => {
   const stats = {
     totalSessions: clients.size,
     totalConnections: 0,
-    sessions: {},
+    sessions: {} as Record<
+      string,
+      {
+        connections: number;
+        clients: Array<{
+          clientId: string;
+          connectedAt: string;
+        }>;
+      }
+    >,
   };
 
   clients.forEach((sessionClients, sessionId) => {
@@ -258,8 +305,8 @@ const getStats = () => {
     stats.sessions[sessionId] = {
       connections: sessionClients.size,
       clients: Array.from(sessionClients).map((ws) => ({
-        clientId: ws.clientId,
-        connectedAt: ws.connectedAt,
+        clientId: ws.id ?? "unknown",
+        connectedAt: new Date().toISOString(), // We could store this if needed
       })),
     };
   });
@@ -270,9 +317,9 @@ const getStats = () => {
 /**
  * Close all connections and stop server
  */
-const stop = () => {
+export const stop = (): void => {
   if (wss) {
-    wss.clients.forEach((ws) => {
+    wss.clients.forEach((ws: ExtendedWebSocket) => {
       ws.close(1000, "Server shutting down");
     });
     wss.close();
@@ -281,7 +328,7 @@ const stop = () => {
   }
 };
 
-module.exports = {
+export default {
   start,
   stop,
   broadcastToSession,

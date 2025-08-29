@@ -4,7 +4,9 @@ module.exports = {
     es2022: true,
     jest: true,
   },
-  extends: ["standard-with-typescript"],
+  extends: [
+    "standard-with-typescript"
+  ],
   parser: "@typescript-eslint/parser",
   parserOptions: {
     ecmaVersion: 2022,

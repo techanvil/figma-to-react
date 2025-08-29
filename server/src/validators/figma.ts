@@ -1,4 +1,6 @@
-const Joi = require("joi");
+import Joi from "joi";
+import type { Request, Response, NextFunction } from "express";
+import type { FigmaNode } from "@/types/index.js";
 
 // Figma node schema
 const figmaNodeSchema = Joi.object({
@@ -75,7 +77,7 @@ const metadataSchema = Joi.object({
 });
 
 // Main Figma data validation schema
-const figmaDataSchema = Joi.object({
+export const figmaDataSchema = Joi.object({
   components: Joi.array().items(figmaNodeSchema).min(1).required(),
   metadata: metadataSchema.required(),
   sessionId: Joi.string().optional(),
@@ -83,7 +85,7 @@ const figmaDataSchema = Joi.object({
 });
 
 // Component transformation request schema
-const componentRequestSchema = Joi.object({
+export const componentRequestSchema = Joi.object({
   components: Joi.array().items(figmaNodeSchema).min(1).required(),
   sessionId: Joi.string().optional(),
   options: Joi.object({
@@ -106,38 +108,48 @@ const componentRequestSchema = Joi.object({
   }).optional(),
 });
 
+// Extended error interface for Joi validation
+interface JoiError extends Error {
+  isJoi: boolean;
+}
+
 // Middleware functions
-const validateFigmaData = (req, res, next) => {
+export const validateFigmaData = (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): void => {
   const { error } = figmaDataSchema.validate(req.body, {
     abortEarly: false,
     stripUnknown: true,
   });
 
   if (error) {
-    error.isJoi = true;
-    return next(error);
+    const joiError = error as JoiError;
+    joiError.isJoi = true;
+    next(joiError);
+    return;
   }
 
   next();
 };
 
-const validateComponentRequest = (req, res, next) => {
+export const validateComponentRequest = (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): void => {
   const { error } = componentRequestSchema.validate(req.body, {
     abortEarly: false,
     stripUnknown: true,
   });
 
   if (error) {
-    error.isJoi = true;
-    return next(error);
+    const joiError = error as JoiError;
+    joiError.isJoi = true;
+    next(joiError);
+    return;
   }
 
   next();
-};
-
-module.exports = {
-  figmaDataSchema,
-  componentRequestSchema,
-  validateFigmaData,
-  validateComponentRequest,
 };
