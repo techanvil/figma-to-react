@@ -69,7 +69,7 @@ async function saveConfiguration(config: BridgeConfig): Promise<boolean> {
 }
 
 // UI Management
-function openUI() {
+async function openUI() {
   if (!isUIOpen) {
     figma.showUI(__html__, {
       width: 400,
@@ -79,8 +79,9 @@ function openUI() {
     isUIOpen = true;
 
     // Send initial data to UI
+    const config = await loadConfiguration();
     sendToUI("plugin-ready", {
-      config: loadConfiguration(),
+      config: config,
       selection: getSelectionData(),
     });
   }
@@ -93,13 +94,28 @@ function closeUI() {
   }
 }
 
-function sendToUI(type, data = {}) {
+function sendToUI(type: string, data: any = {}) {
   if (isUIOpen) {
-    figma.ui.postMessage({
-      type,
-      data,
-      timestamp: Date.now(),
-    });
+    try {
+      // Deep clone and sanitize data to ensure it's serializable
+      const sanitizedData = JSON.parse(JSON.stringify(data));
+      figma.ui.postMessage({
+        type,
+        data: sanitizedData,
+        timestamp: Date.now(),
+      });
+    } catch (error) {
+      console.error("Error sending data to UI:", error);
+      // Send a simplified error message instead
+      figma.ui.postMessage({
+        type: "error",
+        data: {
+          message: "Failed to serialize data for UI",
+          originalType: type,
+        },
+        timestamp: Date.now(),
+      });
+    }
   }
 }
 
@@ -525,18 +541,18 @@ figma.on("selectionchange", () => {
 });
 
 // Menu command handlers
-figma.on("run", ({ command, parameters }) => {
+figma.on("run", async ({ command, parameters }) => {
   console.log("Plugin command:", command, parameters);
 
   switch (command) {
     case "send-to-bridge":
       // Quick send without opening UI
-      handleQuickSendToBridge();
+      await handleQuickSendToBridge();
       break;
 
     case "open-panel":
     default:
-      openUI();
+      await openUI();
       break;
   }
 });
@@ -554,7 +570,7 @@ async function handleQuickSendToBridge() {
 
     if (!config.serverUrl || !config.apiKey) {
       figma.notify("Please configure server settings first", { error: true });
-      openUI();
+      await openUI();
       return;
     }
 
