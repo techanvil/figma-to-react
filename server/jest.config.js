@@ -1,4 +1,4 @@
-module.exports = {
+export default {
   preset: "ts-jest",
   testEnvironment: "node",
   extensionsToTreatAsEsm: [".ts"],
@@ -7,7 +7,7 @@ module.exports = {
       useESM: true,
     },
   },
-  moduleNameMapping: {
+  moduleNameMapper: {
     "^@/(.*)$": "<rootDir>/src/$1",
   },
   collectCoverageFrom: [
@@ -25,4 +25,5 @@ module.exports = {
     "^.+\\.ts$": "ts-jest",
   },
   moduleFileExtensions: ["ts", "js", "json"],
+  passWithNoTests: true,
 };
