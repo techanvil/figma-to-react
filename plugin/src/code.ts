@@ -11,14 +11,159 @@ interface BridgeConfig {
 
 interface UIMessage {
   type: string;
-  data?: any;
+  data?: unknown;
+  timestamp?: number;
 }
 
 interface ComponentData {
   id: string;
   name: string;
   type: string;
-  [key: string]: any;
+  visible: boolean;
+  locked: boolean;
+  removed: boolean;
+  pluginData: string | null;
+  absoluteBoundingBox?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+  constraints?: {
+    horizontal: string;
+    vertical: string;
+  };
+  fills?: FillData[];
+  strokes?: PaintData[];
+  strokeWeight?: number;
+  cornerRadius?: number;
+  rectangleCornerRadii?: number[];
+  effects?: EffectData[];
+  characters?: string;
+  fontSize?: number | typeof figma.mixed;
+  fontName?: FontName | typeof figma.mixed;
+  textAlignHorizontal?: string;
+  textAlignVertical?: string;
+  letterSpacing?: LetterSpacing | typeof figma.mixed;
+  lineHeight?: LineHeight | typeof figma.mixed;
+  style?: CustomTextStyle;
+  componentId?: string;
+  componentName?: string;
+  componentProperties?: ComponentProperties;
+  children?: ComponentData[];
+  layoutMode?: string;
+  primaryAxisSizingMode?: string;
+  counterAxisSizingMode?: string;
+  primaryAxisAlignItems?: string;
+  counterAxisAlignItems?: string;
+  paddingLeft?: number;
+  paddingRight?: number;
+  paddingTop?: number;
+  paddingBottom?: number;
+  itemSpacing?: number;
+}
+
+interface FillData {
+  type: string;
+  visible?: boolean;
+  opacity?: number;
+  blendMode?: string;
+  color?: {
+    r: number;
+    g: number;
+    b: number;
+    a: number;
+  };
+  gradientStops?: GradientStop[];
+  gradientTransform?: Transform;
+  imageHash?: string;
+  scaleMode?: string;
+  imageTransform?: Transform;
+}
+
+interface PaintData extends FillData {}
+
+interface GradientStop {
+  position: number;
+  color: {
+    r: number;
+    g: number;
+    b: number;
+    a: number;
+  };
+}
+
+interface EffectData {
+  type: string;
+  visible: boolean;
+  radius?: number;
+  spread?: number;
+  offset?: {
+    x: number;
+    y: number;
+  };
+  color?: {
+    r: number;
+    g: number;
+    b: number;
+    a: number;
+  };
+  blendMode?: string;
+}
+
+interface CustomTextStyle {
+  fontFamily?: string;
+  fontSize?: number;
+  fontWeight?: number;
+  lineHeightPx?: number;
+  letterSpacing?: number;
+  textAlignHorizontal?: string;
+  textAlignVertical?: string;
+}
+
+interface SelectionData {
+  hasSelection: boolean;
+  count: number;
+  components: ComponentData[];
+  message?: string;
+  metadata?: {
+    fileKey: string;
+    fileName: string;
+    currentPage: {
+      id: string;
+      name: string;
+    };
+    user: {
+      id: string;
+      name: string;
+    } | null;
+    viewport: {
+      center: Vector;
+      zoom: number;
+    };
+    version: string;
+    selectedAt: string;
+  };
+}
+
+interface BridgePayload {
+  components: ComponentData[];
+  metadata: SelectionData["metadata"];
+  sessionId: string;
+  timestamp: string;
+  pluginVersion?: string;
+}
+
+interface BridgeResponse {
+  success: boolean;
+  sessionId?: string;
+  componentCount?: number;
+  error?: string;
+}
+
+interface TestConnectionData {
+  serverUrl: string;
+  apiKey: string;
 }
 
 console.log("Figma to React Bridge Plugin loaded");
@@ -161,7 +306,7 @@ function sendToUI(type: string, data: any = {}) {
 }
 
 // Handle messages from UI
-async function handleUIMessage(msg) {
+async function handleUIMessage(msg: UIMessage) {
   const { type, data } = msg;
 
   console.log("Received UI message:", type, data);
@@ -172,15 +317,15 @@ async function handleUIMessage(msg) {
       break;
 
     case "send-to-bridge":
-      await handleSendToBridge(data);
+      await handleSendToBridge(data as { sessionId?: string });
       break;
 
     case "save-config":
-      await handleSaveConfig(data);
+      await handleSaveConfig(data as BridgeConfig);
       break;
 
     case "test-connection":
-      await handleTestConnection(data);
+      await handleTestConnection(data as TestConnectionData);
       break;
 
     case "close-plugin":
@@ -197,7 +342,7 @@ async function handleUIMessage(msg) {
 }
 
 // Selection handling
-function getSelectionData() {
+function getSelectionData(): SelectionData {
   const selection = figma.currentPage.selection;
 
   if (selection.length === 0) {
@@ -222,14 +367,15 @@ function getSelectionData() {
         id: figma.currentPage.id,
         name: figma.currentPage.name,
       },
-      user: figma.currentUser
-        ? {
-            id: figma.currentUser.id,
-            name: figma.currentUser.name,
-          }
-        : null,
+      user:
+        figma.currentUser && figma.currentUser.id
+          ? {
+              id: figma.currentUser.id,
+              name: figma.currentUser.name,
+            }
+          : null,
       viewport: figma.viewport,
-      version: figma.version || "unknown",
+      version: "1.0.0", // figma.version is not available in plugin API
       selectedAt: new Date().toISOString(),
     },
   };
@@ -241,8 +387,8 @@ function handleGetSelection() {
 }
 
 // Extract comprehensive node data
-function extractNodeData(node) {
-  const baseData = {
+function extractNodeData(node: SceneNode): ComponentData {
+  const baseData: ComponentData = {
     id: node.id,
     name: node.name,
     type: node.type,
@@ -272,23 +418,30 @@ function extractNodeData(node) {
 
   // Extract fills
   if ("fills" in node && node.fills !== figma.mixed) {
-    baseData.fills = node.fills.map((fill) => extractFillData(fill));
+    baseData.fills = (node.fills as Paint[]).map((fill) =>
+      extractFillData(fill)
+    );
   }
 
   // Extract strokes
-  if ("strokes" in node && node.strokes !== figma.mixed) {
-    baseData.strokes = node.strokes.map((stroke) => extractPaintData(stroke));
-    if ("strokeWeight" in node) {
+  if ("strokes" in node && Array.isArray(node.strokes)) {
+    baseData.strokes = (node.strokes as Paint[]).map((stroke) =>
+      extractPaintData(stroke)
+    );
+    if ("strokeWeight" in node && typeof node.strokeWeight === "number") {
       baseData.strokeWeight = node.strokeWeight;
     }
   }
 
   // Extract corner radius
-  if ("cornerRadius" in node) {
+  if ("cornerRadius" in node && typeof node.cornerRadius === "number") {
     baseData.cornerRadius = node.cornerRadius;
   }
 
-  if ("rectangleCornerRadii" in node) {
+  if (
+    "rectangleCornerRadii" in node &&
+    Array.isArray(node.rectangleCornerRadii)
+  ) {
     baseData.rectangleCornerRadii = node.rectangleCornerRadii;
   }
 
@@ -299,30 +452,40 @@ function extractNodeData(node) {
 
   // Extract text-specific data
   if (node.type === "TEXT") {
-    baseData.characters = node.characters;
-    baseData.fontSize = node.fontSize;
-    baseData.fontName = node.fontName;
-    baseData.textAlignHorizontal = node.textAlignHorizontal;
-    baseData.textAlignVertical = node.textAlignVertical;
-    baseData.letterSpacing = node.letterSpacing;
-    baseData.lineHeight = node.lineHeight;
+    const textNode = node as TextNode;
+    baseData.characters = textNode.characters;
+    baseData.fontSize = textNode.fontSize;
+    baseData.fontName = textNode.fontName;
+    baseData.textAlignHorizontal = textNode.textAlignHorizontal;
+    baseData.textAlignVertical = textNode.textAlignVertical;
+    baseData.letterSpacing = textNode.letterSpacing;
+    baseData.lineHeight = textNode.lineHeight;
 
     // Get text style
     try {
       baseData.style = {
-        fontFamily: node.fontName?.family,
-        fontSize: typeof node.fontSize === "number" ? node.fontSize : undefined,
-        fontWeight: convertFontWeightToNumber(node.fontName?.style),
+        fontFamily:
+          typeof textNode.fontName === "object"
+            ? textNode.fontName.family
+            : undefined,
+        fontSize:
+          typeof textNode.fontSize === "number" ? textNode.fontSize : undefined,
+        fontWeight:
+          typeof textNode.fontName === "object"
+            ? convertFontWeightToNumber(textNode.fontName.style)
+            : undefined,
         lineHeightPx:
-          typeof node.lineHeight === "object"
-            ? node.lineHeight.value
+          typeof textNode.lineHeight === "object" &&
+          "value" in textNode.lineHeight
+            ? (textNode.lineHeight as { value: number }).value
             : undefined,
         letterSpacing:
-          typeof node.letterSpacing === "object"
-            ? node.letterSpacing.value
+          typeof textNode.letterSpacing === "object" &&
+          "value" in textNode.letterSpacing
+            ? (textNode.letterSpacing as { value: number }).value
             : undefined,
-        textAlignHorizontal: node.textAlignHorizontal,
-        textAlignVertical: node.textAlignVertical,
+        textAlignHorizontal: textNode.textAlignHorizontal,
+        textAlignVertical: textNode.textAlignVertical,
       };
     } catch (error) {
       console.warn("Error extracting text style:", error);
@@ -348,23 +511,41 @@ function extractNodeData(node) {
   // Add auto layout properties if available
   if ("layoutMode" in node && node.layoutMode !== "NONE") {
     baseData.layoutMode = node.layoutMode;
-    baseData.primaryAxisSizingMode = node.primaryAxisSizingMode;
-    baseData.counterAxisSizingMode = node.counterAxisSizingMode;
-    baseData.primaryAxisAlignItems = node.primaryAxisAlignItems;
-    baseData.counterAxisAlignItems = node.counterAxisAlignItems;
-    baseData.paddingLeft = node.paddingLeft;
-    baseData.paddingRight = node.paddingRight;
-    baseData.paddingTop = node.paddingTop;
-    baseData.paddingBottom = node.paddingBottom;
-    baseData.itemSpacing = node.itemSpacing;
+    if ("primaryAxisSizingMode" in node) {
+      baseData.primaryAxisSizingMode = node.primaryAxisSizingMode;
+    }
+    if ("counterAxisSizingMode" in node) {
+      baseData.counterAxisSizingMode = node.counterAxisSizingMode;
+    }
+    if ("primaryAxisAlignItems" in node) {
+      baseData.primaryAxisAlignItems = node.primaryAxisAlignItems;
+    }
+    if ("counterAxisAlignItems" in node) {
+      baseData.counterAxisAlignItems = node.counterAxisAlignItems;
+    }
+    if ("paddingLeft" in node) {
+      baseData.paddingLeft = node.paddingLeft;
+    }
+    if ("paddingRight" in node) {
+      baseData.paddingRight = node.paddingRight;
+    }
+    if ("paddingTop" in node) {
+      baseData.paddingTop = node.paddingTop;
+    }
+    if ("paddingBottom" in node) {
+      baseData.paddingBottom = node.paddingBottom;
+    }
+    if ("itemSpacing" in node) {
+      baseData.itemSpacing = node.itemSpacing;
+    }
   }
 
   return baseData;
 }
 
 // Extract fill/paint data
-function extractFillData(fill) {
-  const fillData = {
+function extractFillData(fill: Paint): FillData {
+  const fillData: FillData = {
     type: fill.type,
     visible: fill.visible,
     opacity: fill.opacity,
@@ -372,11 +553,12 @@ function extractFillData(fill) {
   };
 
   if (fill.type === "SOLID") {
+    const solidFill = fill as SolidPaint;
     fillData.color = {
-      r: fill.color.r,
-      g: fill.color.g,
-      b: fill.color.b,
-      a: fill.opacity || 1,
+      r: solidFill.color.r,
+      g: solidFill.color.g,
+      b: solidFill.color.b,
+      a: solidFill.opacity || 1,
     };
   } else if (
     fill.type === "GRADIENT_LINEAR" ||
@@ -384,7 +566,8 @@ function extractFillData(fill) {
     fill.type === "GRADIENT_ANGULAR" ||
     fill.type === "GRADIENT_DIAMOND"
   ) {
-    fillData.gradientStops = fill.gradientStops.map((stop) => ({
+    const gradientFill = fill as GradientPaint;
+    fillData.gradientStops = gradientFill.gradientStops.map((stop) => ({
       position: stop.position,
       color: {
         r: stop.color.r,
@@ -394,51 +577,58 @@ function extractFillData(fill) {
       },
     }));
 
-    if (fill.gradientTransform) {
-      fillData.gradientTransform = fill.gradientTransform;
+    if (gradientFill.gradientTransform) {
+      fillData.gradientTransform = gradientFill.gradientTransform;
     }
   } else if (fill.type === "IMAGE") {
-    fillData.imageHash = fill.imageHash;
-    fillData.scaleMode = fill.scaleMode;
-    fillData.imageTransform = fill.imageTransform;
+    const imageFill = fill as ImagePaint;
+    fillData.imageHash = imageFill.imageHash || undefined;
+    fillData.scaleMode = imageFill.scaleMode;
+    fillData.imageTransform = imageFill.imageTransform;
   }
 
   return fillData;
 }
 
-function extractPaintData(paint) {
+function extractPaintData(paint: Paint): PaintData {
   return extractFillData(paint); // Same structure for now
 }
 
 // Extract effect data
-function extractEffectData(effect) {
-  const effectData = {
+function extractEffectData(effect: Effect): EffectData {
+  const effectData: EffectData = {
     type: effect.type,
     visible: effect.visible,
-    radius: effect.radius,
-    spread: effect.spread,
-    offset: effect.offset
-      ? {
-          x: effect.offset.x,
-          y: effect.offset.y,
-        }
-      : undefined,
-    color: effect.color
-      ? {
-          r: effect.color.r,
-          g: effect.color.g,
-          b: effect.color.b,
-          a: effect.color.a || 1,
-        }
-      : undefined,
-    blendMode: effect.blendMode,
   };
+
+  // Handle shadow effects
+  if (effect.type === "DROP_SHADOW" || effect.type === "INNER_SHADOW") {
+    const shadowEffect = effect as DropShadowEffect | InnerShadowEffect;
+    effectData.radius = shadowEffect.radius;
+    effectData.spread = shadowEffect.spread;
+    effectData.offset = {
+      x: shadowEffect.offset.x,
+      y: shadowEffect.offset.y,
+    };
+    effectData.color = {
+      r: shadowEffect.color.r,
+      g: shadowEffect.color.g,
+      b: shadowEffect.color.b,
+      a: shadowEffect.color.a || 1,
+    };
+    effectData.blendMode = shadowEffect.blendMode;
+  }
+  // Handle blur effects
+  else if (effect.type === "LAYER_BLUR" || effect.type === "BACKGROUND_BLUR") {
+    const blurEffect = effect as BlurEffect;
+    effectData.radius = blurEffect.radius;
+  }
 
   return effectData;
 }
 
 // Bridge communication
-async function handleSendToBridge(data) {
+async function handleSendToBridge(data: { sessionId?: string }) {
   try {
     const config = await loadConfiguration();
     const selectionData = getSelectionData();
@@ -457,7 +647,7 @@ async function handleSendToBridge(data) {
     });
 
     // Prepare payload
-    const payload = {
+    const payload: BridgePayload = {
       components: selectionData.components,
       metadata: selectionData.metadata,
       sessionId: data.sessionId || generateSessionId(),
@@ -490,14 +680,23 @@ async function handleSendToBridge(data) {
     }
   } catch (error) {
     console.error("Error sending to bridge:", error);
+    const errorMessage =
+      error instanceof Error
+        ? error.message
+        : "Failed to send to bridge server";
+    const errorString =
+      error instanceof Error ? error.toString() : String(error);
     sendToUI("bridge-error", {
-      message: error.message || "Failed to send to bridge server",
-      error: error.toString(),
+      message: errorMessage,
+      error: errorString,
     });
   }
 }
 
-async function sendToBridgeServer(config, payload) {
+async function sendToBridgeServer(
+  config: BridgeConfig,
+  payload: BridgePayload
+): Promise<BridgeResponse> {
   const url = `${config.serverUrl}/api/figma/components`;
 
   const requestOptions = {
@@ -521,12 +720,13 @@ async function sendToBridgeServer(config, payload) {
     return await response.json();
   } catch (error) {
     console.error("Network error:", error);
-    throw new Error(`Network error: ${error.message}`);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    throw new Error(`Network error: ${errorMessage}`);
   }
 }
 
 // Configuration handlers
-async function handleSaveConfig(configData) {
+async function handleSaveConfig(configData: BridgeConfig) {
   try {
     const success = await saveConfiguration(configData);
     if (success) {
@@ -536,11 +736,12 @@ async function handleSaveConfig(configData) {
     }
   } catch (error) {
     console.error("Error saving config:", error);
-    sendToUI("config-error", { message: error.message });
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    sendToUI("config-error", { message: errorMessage });
   }
 }
 
-async function handleTestConnection(configData) {
+async function handleTestConnection(configData: TestConnectionData) {
   try {
     sendToUI("testing-connection", { status: "testing" });
 
@@ -564,10 +765,13 @@ async function handleTestConnection(configData) {
     }
   } catch (error) {
     console.error("Connection test failed:", error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorString =
+      error instanceof Error ? error.toString() : String(error);
     sendToUI("connection-test-result", {
       success: false,
-      message: `Connection failed: ${error.message}`,
-      error: error.toString(),
+      message: `Connection failed: ${errorMessage}`,
+      error: errorString,
     });
   }
 }
@@ -620,7 +824,7 @@ async function handleQuickSendToBridge() {
 
     figma.notify("Sending components to bridge...", { timeout: 2000 });
 
-    const payload = {
+    const payload: BridgePayload = {
       components: selectionData.components,
       metadata: selectionData.metadata,
       sessionId: generateSessionId(),
@@ -639,7 +843,8 @@ async function handleQuickSendToBridge() {
     }
   } catch (error) {
     console.error("Quick send error:", error);
-    figma.notify(`❌ Failed to send: ${error.message}`, {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    figma.notify(`❌ Failed to send: ${errorMessage}`, {
       error: true,
       timeout: 5000,
     });
