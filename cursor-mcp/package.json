@@ -1,0 +1,29 @@
+{
+  "name": "figma-bridge-mcp-server",
+  "version": "1.0.0",
+  "description": "MCP Server for integrating Figma Bridge with Cursor",
+  "type": "module",
+  "main": "dist/mcp-server-example.js",
+  "bin": {
+    "figma-bridge-mcp": "dist/mcp-server-example.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/mcp-server-example.js",
+    "dev": "tsx mcp-server-example.ts"
+  },
+  "keywords": ["mcp", "figma", "react", "cursor", "components"],
+  "author": "Your Name",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^0.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.6",
+    "typescript": "^5.3.3",
+    "tsx": "^4.7.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
