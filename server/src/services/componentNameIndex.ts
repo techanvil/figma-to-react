@@ -20,9 +20,6 @@ class ComponentNameIndex {
       componentCount: components.length,
     });
 
-    // Store session components
-    this.sessionComponents.set(sessionId, components);
-
     // Index each component with a custom name
     components.forEach((component) => {
       if (component.customName) {
@@ -54,6 +51,14 @@ class ComponentNameIndex {
         this.indexComponents(sessionId, component.children);
       }
     });
+  }
+
+  /**
+   * Store session components after indexing is complete
+   * This should be called after indexComponents to store the final result
+   */
+  storeSessionComponents(sessionId: string, components: FigmaNode[]): void {
+    this.sessionComponents.set(sessionId, components);
   }
 
   /**
@@ -292,15 +297,69 @@ class ComponentNameIndex {
     componentId: string
   ): FigmaNode | undefined {
     for (const component of components) {
+      logger.info("Searching for component", {
+        searchId: componentId,
+        componentId: component.id,
+        componentName: component.id,
+        componentType: component.type,
+        componentCustomName: component.customName,
+        componentChildrenCount: component.children?.length,
+        componentChildrenIds: component.children?.map((child) => child.id),
+      });
       if (component.id === componentId) {
+        logger.info("Found component", {
+          componentId,
+          componentName: component.name,
+        });
         return component;
       }
       if (component.children) {
+        logger.info("Searching for component in children", {
+          componentId,
+          componentName: component.name,
+        });
         const found = this.findComponentById(component.children, componentId);
-        if (found) return found;
+        if (found) {
+          logger.info("Found component in children", {
+            componentId,
+            componentName: component.name,
+          });
+          return found;
+        }
       }
     }
+
+    logger.error("Component not found", {
+      componentId,
+    });
     return undefined;
+  }
+
+  /**
+   * Get component data by session ID and component ID
+   */
+  getComponentData(
+    sessionId: string,
+    componentId: string
+  ): FigmaNode | undefined {
+    const sessionComponents = this.sessionComponents.get(sessionId);
+    if (!sessionComponents) {
+      logger.error("Session components not found", {
+        sessionId,
+        componentId,
+      });
+      return undefined;
+    }
+
+    logger.info("Searching for component", {
+      sessionId,
+      componentId,
+      sessionComponentsCount: sessionComponents.length,
+      sessionComponentsIds: sessionComponents.map((component) => component.id),
+      sessionComponent: sessionComponents[0],
+    });
+
+    return this.findComponentById(sessionComponents, componentId);
   }
 }
 

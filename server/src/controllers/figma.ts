@@ -86,6 +86,9 @@ export const receiveComponents = async (
     // Index components by custom names
     componentNameIndex.indexComponents(sessionId, components);
 
+    // Store session components after indexing is complete
+    componentNameIndex.storeSessionComponents(sessionId, components);
+
     // Update session info
     if (!sessions.has(sessionId)) {
       sessions.set(sessionId, {
@@ -552,6 +555,275 @@ export const updateComponentName = async (
       error: (error as Error).message,
       sessionId: req.params.sessionId,
       componentId: req.params.componentId,
+    });
+    throw error;
+  }
+};
+
+/**
+ * Get component by custom name (Cursor-friendly)
+ */
+export const getComponentByName = async (
+  req: Request<{ name: string }>,
+  res: Response<SuccessResponse>
+): Promise<void> => {
+  try {
+    const { name } = req.params;
+
+    // Search for component by custom name
+    const searchResults = componentNameIndex.searchByCustomName(name);
+
+    // Prefer exact matches
+    let targetComponent = searchResults.exactMatches[0];
+    if (!targetComponent && searchResults.partialMatches.length > 0) {
+      targetComponent = searchResults.partialMatches[0];
+    }
+
+    if (!targetComponent) {
+      res.status(404).json({
+        success: false,
+        error: "Component not found",
+        message: `No component found with name: ${name}`,
+        timestamp: new Date().toISOString(),
+      } as any);
+      return;
+    }
+
+    logger.info("Target component", {
+      targetComponentId: targetComponent.component.id,
+    });
+
+    // Get the full component data
+    const componentData = componentNameIndex.getComponentData(
+      targetComponent.sessionId,
+      targetComponent.component.id
+    );
+
+    if (!componentData) {
+      res.status(404).json({
+        success: false,
+        error: "Component data not found",
+        message: `Component data not found for: ${name}`,
+        timestamp: new Date().toISOString(),
+      } as any);
+      return;
+    }
+
+    logger.info("Component retrieved by name", {
+      name,
+      componentId: targetComponent.component.id,
+      sessionId: targetComponent.sessionId,
+    });
+
+    res.json({
+      success: true,
+      data: {
+        component: componentData,
+        metadata: {
+          customName: targetComponent.component.customName,
+          originalName: targetComponent.component.name,
+          sessionId: targetComponent.sessionId,
+          componentId: targetComponent.component.id,
+        },
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    logger.error("Error retrieving component by name", {
+      error: (error as Error).message,
+      name: req.params.name,
+    });
+    throw error;
+  }
+};
+
+/**
+ * Generate React component code from Figma component name (one-step for Cursor)
+ */
+export const generateComponentCode = async (
+  req: Request<
+    {},
+    SuccessResponse,
+    {},
+    {
+      name: string;
+      framework?: string;
+      typescript?: string;
+      styling?: string;
+      componentNaming?: string;
+    }
+  >,
+  res: Response<SuccessResponse>
+): Promise<void> => {
+  try {
+    const {
+      name,
+      framework = "react",
+      typescript = "true",
+      styling = "css",
+      componentNaming = "pascal",
+    } = req.query;
+
+    if (!name || typeof name !== "string") {
+      res.status(400).json({
+        success: false,
+        error: "Component name is required",
+        message:
+          "Please provide a component name in the 'name' query parameter",
+        timestamp: new Date().toISOString(),
+      } as any);
+      return;
+    }
+
+    // Search for component by custom name
+    const searchResults = componentNameIndex.searchByCustomName(name);
+
+    // Prefer exact matches
+    let targetComponent = searchResults.exactMatches[0];
+    if (!targetComponent && searchResults.partialMatches.length > 0) {
+      targetComponent = searchResults.partialMatches[0];
+    }
+
+    if (!targetComponent) {
+      res.status(404).json({
+        success: false,
+        error: "Component not found",
+        message: `No component found with name: ${name}`,
+        suggestions: componentNameIndex.getAllCustomNames().slice(0, 5),
+        timestamp: new Date().toISOString(),
+      } as any);
+      return;
+    }
+
+    // Get the full component data
+    const componentData = componentNameIndex.getComponentData(
+      targetComponent.sessionId,
+      targetComponent.component.id
+    );
+
+    if (!componentData) {
+      res.status(404).json({
+        success: false,
+        error: "Component data not found",
+        timestamp: new Date().toISOString(),
+      } as any);
+      return;
+    }
+
+    // Transform options
+    const transformOptions: TransformOptions = {
+      framework: framework as any,
+      typescript: typescript === "true",
+      styling: styling as any,
+      componentNaming: componentNaming as any,
+      includeProps: true,
+      includeTypes: typescript === "true",
+      generateStorybook: false,
+      generateTests: false,
+      extractTokens: false,
+      optimizeImages: false,
+    };
+
+    logger.info("Generating React component code", {
+      name,
+      componentId: targetComponent.component.id,
+      options: transformOptions,
+    });
+
+    // Transform the component
+    const transformedComponents = await figmaTransformer.transformComponents(
+      [componentData],
+      transformOptions
+    );
+
+    if (transformedComponents.length === 0) {
+      res.status(500).json({
+        success: false,
+        error: "Transformation failed",
+        message: "Failed to transform Figma component to React code",
+        timestamp: new Date().toISOString(),
+      } as any);
+      return;
+    }
+
+    const transformedComponent = transformedComponents[0];
+
+    logger.info("React component code generated", {
+      name,
+      componentName: transformedComponent.name,
+      hasCode: !!transformedComponent.code?.component,
+    });
+
+    res.json({
+      success: true,
+      data: {
+        componentName: transformedComponent.name,
+        originalFigmaName: targetComponent.originalName,
+        customName: targetComponent.customName,
+        code: transformedComponent.code,
+        props: transformedComponent.props,
+        metadata: {
+          sessionId: targetComponent.sessionId,
+          componentId: targetComponent.component.id,
+          transformOptions,
+          generatedAt: new Date().toISOString(),
+        },
+      },
+      message: `Generated React component code for: ${name}`,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    logger.error("Error generating component code", {
+      error: (error as Error).message,
+      name: req.query.name,
+    });
+    throw error;
+  }
+};
+
+/**
+ * Get all available components for Cursor autocomplete
+ */
+export const getAvailableComponents = async (
+  req: Request,
+  res: Response<SuccessResponse>
+): Promise<void> => {
+  try {
+    const allCustomNames = componentNameIndex.getAllCustomNames();
+
+    // Get component details for each name
+    const availableComponents = allCustomNames.map((name) => {
+      const searchResults = componentNameIndex.searchByCustomName(
+        name.customName
+      );
+      const component = searchResults.exactMatches[0];
+
+      return {
+        name,
+        originalName: component?.component.name,
+        sessionId: component?.sessionId,
+        componentId: component?.component.id,
+        lastUpdated: component?.component.lastUpdated,
+      };
+    });
+
+    logger.info("Available components retrieved", {
+      count: availableComponents.length,
+    });
+
+    res.json({
+      success: true,
+      data: {
+        components: availableComponents,
+        totalCount: availableComponents.length,
+        lastUpdated: new Date().toISOString(),
+      },
+      message: `Found ${availableComponents.length} available components`,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    logger.error("Error retrieving available components", {
+      error: (error as Error).message,
     });
     throw error;
   }

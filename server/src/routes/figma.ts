@@ -98,6 +98,27 @@ router.put(
 );
 
 /**
+ * GET /api/figma/components/by-name/:name
+ * Get component by custom name (Cursor-friendly)
+ */
+router.get(
+  "/components/by-name/:name",
+  asyncHandler(figmaController.getComponentByName)
+);
+
+/**
+ * GET /api/figma/generate?name=<name>&framework=react&typescript=true
+ * Generate React component code from Figma component name (one-step for Cursor)
+ */
+router.get("/generate", asyncHandler(figmaController.generateComponentCode));
+
+/**
+ * GET /api/figma/available
+ * Get all available components for Cursor autocomplete
+ */
+router.get("/available", asyncHandler(figmaController.getAvailableComponents));
+
+/**
  * WebSocket endpoint info
  */
 router.get("/websocket/info", (req: Request, res: Response) => {
