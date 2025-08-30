@@ -10,9 +10,17 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/mcp-server-example.js",
-    "dev": "tsx mcp-server-example.ts"
+    "dev": "tsx mcp-server-example.ts",
+    "clean": "rm -rf dist",
+    "rebuild": "npm run clean && npm run build"
   },
-  "keywords": ["mcp", "figma", "react", "cursor", "components"],
+  "keywords": [
+    "mcp",
+    "figma",
+    "react",
+    "cursor",
+    "components"
+  ],
   "author": "Your Name",
   "license": "MIT",
   "dependencies": {

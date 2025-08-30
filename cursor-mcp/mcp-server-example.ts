@@ -50,17 +50,13 @@ class FigmaBridgeMCPServer {
   private server: Server;
 
   constructor() {
-    this.server = new Server(
-      {
-        name: "figma-bridge",
-        version: "1.0.0",
+    this.server = new Server({
+      name: "figma-bridge",
+      version: "1.0.0",
+      capabilities: {
+        tools: {},
       },
-      {
-        capabilities: {
-          tools: {},
-        },
-      }
-    );
+    });
 
     this.setupToolHandlers();
   }
