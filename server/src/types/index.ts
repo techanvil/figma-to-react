@@ -141,11 +141,34 @@ export interface TransformOptions {
   customMappings?: Record<string, unknown>;
 }
 
+// Transformed React component structure
+export interface TransformedComponent {
+  id: string;
+  name: string;
+  type: string;
+  code?: {
+    component?: string;
+    styles?: string;
+    types?: string;
+  };
+  props?: Array<{
+    name: string;
+    type: string;
+    required: boolean;
+    defaultValue?: unknown;
+  }>;
+  reactCode?: string;
+  styles?: Record<string, unknown>;
+  transformedAt: string;
+  error?: string;
+  originalComponent?: FigmaNode;
+}
+
 export interface TransformEntry {
   id: string;
   sessionId: string;
   originalComponents: FigmaNode[];
-  transformedComponents: unknown[];
+  transformedComponents: TransformedComponent[];
   options: TransformOptions;
   transformedAt: string;
 }

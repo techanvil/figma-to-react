@@ -12,6 +12,7 @@ import type {
   ComponentEntry,
   TransformEntry,
   TransformOptions,
+  TransformedComponent,
   SuccessResponse,
   ErrorResponse,
 } from "@/types/index.js";
@@ -747,6 +748,15 @@ export const generateComponentCode = async (
     }
 
     const transformedComponent = transformedComponents[0];
+    if (!transformedComponent) {
+      res.status(500).json({
+        success: false,
+        error: "Transformation failed",
+        message: "No transformed component returned",
+        timestamp: new Date().toISOString(),
+      } as any);
+      return;
+    }
 
     logger.info("React component code generated", {
       name,
@@ -758,8 +768,8 @@ export const generateComponentCode = async (
       success: true,
       data: {
         componentName: transformedComponent.name,
-        originalFigmaName: targetComponent.originalName,
-        customName: targetComponent.customName,
+        originalFigmaName: targetComponent.component.name,
+        customName: targetComponent.component.customName,
         code: transformedComponent.code,
         props: transformedComponent.props,
         metadata: {

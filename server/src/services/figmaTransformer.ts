@@ -1,5 +1,5 @@
 import logger from "@/utils/logger.js";
-import type { FigmaNode, TransformOptions } from "@/types/index.js";
+import type { FigmaNode, TransformOptions, TransformedComponent } from "@/types/index.js";
 
 /**
  * Transform Figma components to React component structure
@@ -11,7 +11,7 @@ class FigmaTransformer {
   async transformComponents(
     components: FigmaNode[],
     options: Partial<TransformOptions> = {}
-  ): Promise<unknown[]> {
+  ): Promise<TransformedComponent[]> {
     const {
       framework = "react",
       typescript = true,
@@ -28,7 +28,7 @@ class FigmaTransformer {
       styling,
     });
 
-    const transformedComponents: unknown[] = [];
+    const transformedComponents: TransformedComponent[] = [];
 
     for (const component of components) {
       try {
@@ -48,8 +48,10 @@ class FigmaTransformer {
         transformedComponents.push({
           id: component.id,
           name: component.name,
+          type: component.type,
           error: (error as Error).message,
           originalComponent: component,
+          transformedAt: new Date().toISOString(),
         });
       }
     }
@@ -70,7 +72,7 @@ class FigmaTransformer {
   private async transformSingleComponent(
     component: FigmaNode,
     options: Partial<TransformOptions>
-  ): Promise<unknown> {
+  ): Promise<TransformedComponent> {
     // Placeholder implementation - this would contain the actual transformation logic
     logger.debug("Transforming component", {
       componentId: component.id,
