@@ -7,7 +7,7 @@
     "build": "webpack --mode=production",
     "build:dev": "webpack --mode=development",
     "build:watch": "webpack --mode=development --watch",
-    "dev": "npm run build:dev && npm run build:watch",
+    "dev": "npm run build:watch",
     "dev:fast": "webpack --mode=development --watch --progress",
     "clean": "rm -rf dist",
     "prebuild": "npm run clean && mkdir -p dist"
