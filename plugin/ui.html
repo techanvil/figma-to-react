@@ -1,0 +1,974 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Figma to React Bridge</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
+          Roboto, sans-serif;
+        font-size: 12px;
+        line-height: 1.4;
+        color: #333;
+        background: #fff;
+        overflow-x: hidden;
+      }
+
+      .container {
+        padding: 16px;
+        max-width: 100%;
+      }
+
+      .header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 16px;
+        padding-bottom: 12px;
+        border-bottom: 1px solid #e5e5e5;
+      }
+
+      .title {
+        font-size: 14px;
+        font-weight: 600;
+        color: #333;
+      }
+
+      .status-indicator {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #ccc;
+        transition: background 0.2s;
+      }
+
+      .status-indicator.connected {
+        background: #00c851;
+      }
+
+      .status-indicator.error {
+        background: #ff4444;
+      }
+
+      .section {
+        margin-bottom: 20px;
+      }
+
+      .section-title {
+        font-size: 12px;
+        font-weight: 600;
+        color: #666;
+        margin-bottom: 8px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      .selection-info {
+        padding: 12px;
+        background: #f8f9fa;
+        border-radius: 6px;
+        border: 1px solid #e9ecef;
+      }
+
+      .selection-count {
+        font-weight: 600;
+        color: #007bff;
+        margin-bottom: 4px;
+      }
+
+      .selection-details {
+        font-size: 11px;
+        color: #666;
+      }
+
+      .component-list {
+        max-height: 120px;
+        overflow-y: auto;
+        margin-top: 8px;
+      }
+
+      .component-item {
+        padding: 8px;
+        background: #fff;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        margin-bottom: 6px;
+        font-size: 11px;
+      }
+
+      .component-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 6px;
+      }
+
+      .component-name {
+        font-weight: 500;
+        color: #333;
+        flex: 1;
+      }
+
+      .component-type {
+        color: #666;
+        font-size: 10px;
+        background: #f1f3f4;
+        padding: 2px 6px;
+        border-radius: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+      }
+
+      .custom-name-input {
+        width: 100%;
+        padding: 4px 6px;
+        border: 1px solid #ddd;
+        border-radius: 3px;
+        font-size: 10px;
+        background: #fafafa;
+        margin-top: 4px;
+      }
+
+      .custom-name-input:focus {
+        outline: none;
+        border-color: #007bff;
+        background: #fff;
+      }
+
+      .custom-name-label {
+        font-size: 9px;
+        color: #666;
+        margin-bottom: 2px;
+        display: block;
+      }
+
+      .button {
+        width: 100%;
+        padding: 10px 16px;
+        border: none;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+      }
+
+      .button:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+
+      .button.primary {
+        background: #007bff;
+        color: white;
+      }
+
+      .button.primary:hover:not(:disabled) {
+        background: #0056b3;
+      }
+
+      .button.secondary {
+        background: #6c757d;
+        color: white;
+      }
+
+      .button.secondary:hover:not(:disabled) {
+        background: #545b62;
+      }
+
+      .button.success {
+        background: #28a745;
+        color: white;
+      }
+
+      .button.danger {
+        background: #dc3545;
+        color: white;
+      }
+
+      .button-group {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+
+      .button-group .button {
+        flex: 1;
+      }
+
+      .input-group {
+        margin-bottom: 12px;
+      }
+
+      .input-label {
+        display: block;
+        font-size: 11px;
+        font-weight: 500;
+        color: #666;
+        margin-bottom: 4px;
+      }
+
+      .input {
+        width: 100%;
+        padding: 8px 12px;
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+        font-size: 12px;
+        transition: border-color 0.2s;
+      }
+
+      .input:focus {
+        outline: none;
+        border-color: #007bff;
+        box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+      }
+
+      .checkbox-group {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 8px;
+      }
+
+      .checkbox {
+        width: 14px;
+        height: 14px;
+      }
+
+      .checkbox-label {
+        font-size: 11px;
+        color: #666;
+      }
+
+      .alert {
+        padding: 10px 12px;
+        border-radius: 4px;
+        margin-bottom: 12px;
+        font-size: 11px;
+        display: none;
+      }
+
+      .alert.show {
+        display: block;
+      }
+
+      .alert.success {
+        background: #d4edda;
+        color: #155724;
+        border: 1px solid #c3e6cb;
+      }
+
+      .alert.error {
+        background: #f8d7da;
+        color: #721c24;
+        border: 1px solid #f5c6cb;
+      }
+
+      .alert.info {
+        background: #d1ecf1;
+        color: #0c5460;
+        border: 1px solid #bee5eb;
+      }
+
+      .alert.warning {
+        background: #fff3cd;
+        color: #856404;
+        border: 1px solid #ffeaa7;
+      }
+
+      .progress-bar {
+        width: 100%;
+        height: 4px;
+        background: #e9ecef;
+        border-radius: 2px;
+        overflow: hidden;
+        margin: 8px 0;
+      }
+
+      .progress-fill {
+        height: 100%;
+        background: #007bff;
+        width: 0%;
+        transition: width 0.3s ease;
+      }
+
+      .tabs {
+        display: flex;
+        border-bottom: 1px solid #dee2e6;
+        margin-bottom: 16px;
+      }
+
+      .tab {
+        flex: 1;
+        padding: 8px 12px;
+        background: none;
+        border: none;
+        cursor: pointer;
+        font-size: 11px;
+        font-weight: 500;
+        color: #666;
+        border-bottom: 2px solid transparent;
+        transition: all 0.2s;
+      }
+
+      .tab.active {
+        color: #007bff;
+        border-bottom-color: #007bff;
+      }
+
+      .tab-content {
+        display: none;
+      }
+
+      .tab-content.active {
+        display: block;
+      }
+
+      .config-section {
+        background: #f8f9fa;
+        padding: 12px;
+        border-radius: 6px;
+        border: 1px solid #e9ecef;
+      }
+
+      .spinner {
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        border: 2px solid #f3f3f3;
+        border-top: 2px solid #007bff;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+      }
+
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+
+      .hidden {
+        display: none;
+      }
+
+      .text-center {
+        text-align: center;
+      }
+
+      .text-small {
+        font-size: 10px;
+        color: #999;
+      }
+
+      .mt-2 {
+        margin-top: 8px;
+      }
+      .mb-2 {
+        margin-bottom: 8px;
+      }
+      .mt-3 {
+        margin-top: 12px;
+      }
+      .mb-3 {
+        margin-bottom: 12px;
+      }
+
+      .session-info {
+        background: #e8f4f8;
+        padding: 8px 10px;
+        border-radius: 4px;
+        border-left: 3px solid #007bff;
+        font-size: 10px;
+        color: #0c5460;
+        margin-bottom: 12px;
+      }
+
+      .session-id {
+        font-family: monospace;
+        font-weight: 600;
+        word-break: break-all;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <!-- Header -->
+      <div class="header">
+        <div class="title">Figma to React Bridge</div>
+        <div class="status-indicator" id="statusIndicator"></div>
+      </div>
+
+      <!-- Alert Messages -->
+      <div id="alertContainer"></div>
+
+      <!-- Tabs -->
+      <div class="tabs">
+        <button class="tab active" onclick="switchTab('send')">Send</button>
+        <button class="tab" onclick="switchTab('config')">Config</button>
+        <button class="tab" onclick="switchTab('about')">About</button>
+      </div>
+
+      <!-- Send Tab -->
+      <div id="sendTab" class="tab-content active">
+        <!-- Selection Info -->
+        <div class="section">
+          <div class="section-title">Current Selection</div>
+          <div id="selectionInfo" class="selection-info">
+            <div id="selectionCount" class="selection-count">
+              No components selected
+            </div>
+            <div id="selectionDetails" class="selection-details">
+              Select components in Figma to send to the bridge server
+            </div>
+            <div id="componentList" class="component-list hidden"></div>
+          </div>
+        </div>
+
+        <!-- Session Info -->
+        <div id="sessionInfo" class="session-info hidden">
+          <div>Session ID: <span id="sessionId" class="session-id"></span></div>
+        </div>
+
+        <!-- Send Options -->
+        <div class="section">
+          <div class="section-title">Send Options</div>
+
+          <div class="checkbox-group">
+            <input
+              type="checkbox"
+              id="includeMetadata"
+              class="checkbox"
+              checked
+            />
+            <label for="includeMetadata" class="checkbox-label"
+              >Include metadata</label
+            >
+          </div>
+
+          <div class="checkbox-group">
+            <input type="checkbox" id="autoTransform" class="checkbox" />
+            <label for="autoTransform" class="checkbox-label"
+              >Auto-transform to React</label
+            >
+          </div>
+
+          <div class="checkbox-group">
+            <input type="checkbox" id="extractTokens" class="checkbox" />
+            <label for="extractTokens" class="checkbox-label"
+              >Extract design tokens</label
+            >
+          </div>
+        </div>
+
+        <!-- Progress Bar -->
+        <div id="progressContainer" class="hidden">
+          <div class="progress-bar">
+            <div id="progressFill" class="progress-fill"></div>
+          </div>
+          <div id="progressText" class="text-small text-center">
+            Preparing...
+          </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="button-group">
+          <button
+            id="refreshButton"
+            class="button secondary"
+            onclick="refreshSelection()"
+          >
+            <span>↻</span> Refresh
+          </button>
+          <button
+            id="sendButton"
+            class="button primary"
+            onclick="sendToBridge()"
+            disabled
+          >
+            <span>→</span> Send to Bridge
+          </button>
+        </div>
+      </div>
+
+      <!-- Config Tab -->
+      <div id="configTab" class="tab-content">
+        <div class="config-section">
+          <div class="input-group">
+            <label class="input-label" for="serverUrl">Bridge Server URL</label>
+            <input
+              type="text"
+              id="serverUrl"
+              class="input"
+              placeholder="http://localhost:3001"
+            />
+          </div>
+
+          <div class="input-group">
+            <label class="input-label" for="apiKey">API Key</label>
+            <input
+              type="password"
+              id="apiKey"
+              class="input"
+              placeholder="Enter your API key"
+            />
+          </div>
+
+          <div class="checkbox-group">
+            <input type="checkbox" id="autoConnect" class="checkbox" checked />
+            <label for="autoConnect" class="checkbox-label"
+              >Auto-connect on startup</label
+            >
+          </div>
+
+          <div class="button-group mt-3">
+            <button
+              id="testConnectionButton"
+              class="button secondary"
+              onclick="testConnection()"
+            >
+              Test Connection
+            </button>
+            <button
+              id="saveConfigButton"
+              class="button primary"
+              onclick="saveConfig()"
+            >
+              Save Config
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- About Tab -->
+      <div id="aboutTab" class="tab-content">
+        <div class="section">
+          <div class="section-title">About</div>
+          <p class="text-small mb-2">Figma to React Bridge Plugin v1.0.0</p>
+          <p class="text-small mb-2">
+            This plugin sends selected Figma components to a bridge server for
+            React component generation.
+          </p>
+          <p class="text-small mb-2">Features:</p>
+          <ul class="text-small" style="margin-left: 16px; margin-bottom: 12px">
+            <li>Send component data to bridge server</li>
+            <li>Real-time WebSocket communication</li>
+            <li>Design token extraction</li>
+            <li>Component analysis and transformation</li>
+          </ul>
+          <p class="text-small">
+            For support and documentation, visit the project repository.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // Plugin UI State
+      let currentConfig = {
+        serverUrl: "http://localhost:3001",
+        apiKey: "",
+        autoConnect: true,
+      };
+
+      let selectionData = null;
+      let isConnected = false;
+      let currentSessionId = null;
+
+      // Initialize UI
+      document.addEventListener("DOMContentLoaded", function () {
+        console.log("UI loaded");
+
+        // Request initial data from plugin
+        postMessage("get-selection");
+
+        // Set up event listeners
+        setupEventListeners();
+      });
+
+      // Message handling
+      window.onmessage = function (event) {
+        const { type, data } = event.data.pluginMessage || {};
+        console.log("Received message:", type, data);
+
+        switch (type) {
+          case "plugin-ready":
+            handlePluginReady(data);
+            break;
+          case "selection-data":
+          case "selection-changed":
+          case "selection-updated":
+            handleSelectionUpdate(data);
+            break;
+          case "sending-to-bridge":
+            handleSendingProgress(data);
+            break;
+          case "bridge-success":
+            handleBridgeSuccess(data);
+            break;
+          case "bridge-error":
+            handleBridgeError(data);
+            break;
+          case "config-saved":
+            handleConfigSaved(data);
+            break;
+          case "config-error":
+            handleConfigError(data);
+            break;
+          case "connection-test-result":
+            handleConnectionTestResult(data);
+            break;
+          case "testing-connection":
+            handleTestingConnection(data);
+            break;
+          case "error":
+            showAlert("error", data.message);
+            break;
+          default:
+            console.log("Unhandled message type:", type);
+        }
+      };
+
+      function postMessage(type, data = {}) {
+        parent.postMessage(
+          {
+            pluginMessage: { type, data },
+          },
+          "*"
+        );
+      }
+
+      // Event handlers
+      function setupEventListeners() {
+        // Auto-refresh selection when tab becomes active
+        document.addEventListener("visibilitychange", function () {
+          if (!document.hidden) {
+            refreshSelection();
+          }
+        });
+      }
+
+      function handlePluginReady(data) {
+        if (data.config) {
+          currentConfig = { ...currentConfig, ...data.config };
+          updateConfigUI();
+        }
+
+        if (data.selection) {
+          handleSelectionUpdate(data.selection);
+        }
+
+        updateStatusIndicator("ready");
+      }
+
+      function handleSelectionUpdate(data) {
+        selectionData = data;
+        updateSelectionUI();
+      }
+
+      function handleSendingProgress(data) {
+        const { status, message } = data;
+
+        showProgress(true);
+        updateProgressText(message);
+
+        if (status === "preparing") {
+          setProgress(25);
+        } else if (status === "sending") {
+          setProgress(75);
+        }
+
+        // Disable send button during sending
+        document.getElementById("sendButton").disabled = true;
+      }
+
+      function handleBridgeSuccess(data) {
+        showProgress(false);
+        setProgress(100);
+
+        currentSessionId = data.sessionId;
+        updateSessionInfo();
+
+        showAlert(
+          "success",
+          `✅ ${data.message} (${data.componentCount} ${
+            data.componentCount === 1 ? "component" : "components"
+          })`
+        );
+
+        // Re-enable send button
+        document.getElementById("sendButton").disabled =
+          !selectionData?.hasSelection;
+
+        updateStatusIndicator("connected");
+      }
+
+      function handleBridgeError(data) {
+        showProgress(false);
+        setProgress(0);
+
+        showAlert("error", `❌ ${data.message}`);
+
+        // Re-enable send button
+        document.getElementById("sendButton").disabled =
+          !selectionData?.hasSelection;
+
+        updateStatusIndicator("error");
+      }
+
+      function handleConfigSaved(data) {
+        showAlert("success", "✅ Configuration saved successfully");
+      }
+
+      function handleConfigError(data) {
+        showAlert("error", `❌ ${data.message}`);
+      }
+
+      function handleConnectionTestResult(data) {
+        const button = document.getElementById("testConnectionButton");
+        button.disabled = false;
+        button.innerHTML = "Test Connection";
+
+        if (data.success) {
+          showAlert("success", "✅ Connection successful!");
+          updateStatusIndicator("connected");
+          isConnected = true;
+        } else {
+          showAlert("error", `❌ ${data.message}`);
+          updateStatusIndicator("error");
+          isConnected = false;
+        }
+      }
+
+      function handleTestingConnection(data) {
+        const button = document.getElementById("testConnectionButton");
+        button.disabled = true;
+        button.innerHTML = '<span class="spinner"></span> Testing...';
+      }
+
+      // UI update functions
+      function updateSelectionUI() {
+        const countEl = document.getElementById("selectionCount");
+        const detailsEl = document.getElementById("selectionDetails");
+        const listEl = document.getElementById("componentList");
+        const sendButton = document.getElementById("sendButton");
+
+        if (!selectionData || !selectionData.hasSelection) {
+          countEl.textContent = "No components selected";
+          detailsEl.textContent =
+            "Select components in Figma to send to the bridge server";
+          listEl.classList.add("hidden");
+          sendButton.disabled = true;
+        } else {
+          const count = selectionData.count;
+          countEl.textContent = `${count} component${
+            count !== 1 ? "s" : ""
+          } selected`;
+          detailsEl.textContent = `From: ${
+            selectionData.metadata?.fileName || "Unknown file"
+          }`;
+
+          // Update component list
+          if (selectionData.components && selectionData.components.length > 0) {
+            listEl.innerHTML = selectionData.components
+              .map(
+                (component, index) => `
+            <div class="component-item" data-component-id="${component.id}">
+              <div class="component-header">
+                <div class="component-name">${component.name}</div>
+                <div class="component-type">${component.type}</div>
+              </div>
+              <label class="custom-name-label">Custom name (optional):</label>
+              <input 
+                type="text" 
+                class="custom-name-input" 
+                placeholder="Enter a descriptive name..."
+                data-component-index="${index}"
+                value="${component.customName || ""}"
+                onchange="updateComponentName(${index}, this.value)"
+              />
+            </div>
+          `
+              )
+              .join("");
+            listEl.classList.remove("hidden");
+          } else {
+            listEl.classList.add("hidden");
+          }
+
+          sendButton.disabled = false;
+        }
+      }
+
+      function updateConfigUI() {
+        document.getElementById("serverUrl").value =
+          currentConfig.serverUrl || "";
+        document.getElementById("apiKey").value = currentConfig.apiKey || "";
+        document.getElementById("autoConnect").checked =
+          currentConfig.autoConnect !== false;
+      }
+
+      function updateSessionInfo() {
+        const sessionInfoEl = document.getElementById("sessionInfo");
+        const sessionIdEl = document.getElementById("sessionId");
+
+        if (currentSessionId) {
+          sessionIdEl.textContent = currentSessionId;
+          sessionInfoEl.classList.remove("hidden");
+        } else {
+          sessionInfoEl.classList.add("hidden");
+        }
+      }
+
+      function updateStatusIndicator(status) {
+        const indicator = document.getElementById("statusIndicator");
+        indicator.className = "status-indicator";
+
+        switch (status) {
+          case "connected":
+            indicator.classList.add("connected");
+            break;
+          case "error":
+            indicator.classList.add("error");
+            break;
+          default:
+            // Default gray color
+            break;
+        }
+      }
+
+      // Tab management
+      function switchTab(tabName) {
+        // Update tab buttons
+        document.querySelectorAll(".tab").forEach((tab) => {
+          tab.classList.remove("active");
+        });
+        event.target.classList.add("active");
+
+        // Update tab content
+        document.querySelectorAll(".tab-content").forEach((content) => {
+          content.classList.remove("active");
+        });
+        document.getElementById(tabName + "Tab").classList.add("active");
+      }
+
+      // Action functions
+      function refreshSelection() {
+        postMessage("refresh-selection");
+        showAlert("info", "Refreshing selection...", 1000);
+      }
+
+      function updateComponentName(index, customName) {
+        if (
+          selectionData &&
+          selectionData.components &&
+          selectionData.components[index]
+        ) {
+          selectionData.components[index].customName =
+            customName.trim() || null;
+          console.log(`Updated component ${index} custom name to:`, customName);
+        }
+      }
+
+      function sendToBridge() {
+        if (!selectionData || !selectionData.hasSelection) {
+          showAlert("warning", "Please select components first");
+          return;
+        }
+
+        const options = {
+          includeMetadata: document.getElementById("includeMetadata").checked,
+          autoTransform: document.getElementById("autoTransform").checked,
+          extractTokens: document.getElementById("extractTokens").checked,
+          sessionId: currentSessionId || generateSessionId(),
+          components: selectionData.components, // Include components with custom names
+        };
+
+        postMessage("send-to-bridge", options);
+      }
+
+      function testConnection() {
+        const config = getConfigFromUI();
+
+        if (!config.serverUrl) {
+          showAlert("warning", "Please enter a server URL");
+          return;
+        }
+
+        postMessage("test-connection", config);
+      }
+
+      function saveConfig() {
+        const config = getConfigFromUI();
+
+        if (!config.serverUrl) {
+          showAlert("warning", "Please enter a server URL");
+          return;
+        }
+
+        currentConfig = config;
+        postMessage("save-config", config);
+      }
+
+      function getConfigFromUI() {
+        return {
+          serverUrl: document.getElementById("serverUrl").value.trim(),
+          apiKey: document.getElementById("apiKey").value.trim(),
+          autoConnect: document.getElementById("autoConnect").checked,
+        };
+      }
+
+      // Utility functions
+      function showAlert(type, message, timeout = 5000) {
+        const container = document.getElementById("alertContainer");
+
+        const alert = document.createElement("div");
+        alert.className = `alert ${type} show`;
+        alert.textContent = message;
+
+        container.appendChild(alert);
+
+        setTimeout(() => {
+          alert.classList.remove("show");
+          setTimeout(() => container.removeChild(alert), 300);
+        }, timeout);
+      }
+
+      function showProgress(show) {
+        const container = document.getElementById("progressContainer");
+        if (show) {
+          container.classList.remove("hidden");
+        } else {
+          container.classList.add("hidden");
+        }
+      }
+
+      function setProgress(percentage) {
+        document.getElementById("progressFill").style.width = percentage + "%";
+      }
+
+      function updateProgressText(text) {
+        document.getElementById("progressText").textContent = text;
+      }
+
+      function generateSessionId() {
+        return (
+          "ui-" + Date.now() + "-" + Math.random().toString(36).substr(2, 9)
+        );
+      }
+    </script>
+  </body>
+</html>

@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "figma-bridge": {
+      "command": "node",
+      "args": ["dist/mcp-server-example.js"],
+      "env": {
+        "FIGMA_BRIDGE_URL": "http://localhost:3001",
+        "FIGMA_BRIDGE_API_KEY": ""
+      }
+    }
+  }
+}

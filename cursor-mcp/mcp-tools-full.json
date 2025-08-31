@@ -1,0 +1,211 @@
+{
+  "tools": [
+    {
+      "name": "list_figma_components",
+      "description": "List all available Figma components that can be generated into React code. Use this to see what components are available from the design team.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "search": {
+            "type": "string",
+            "description": "Optional search term to filter components (e.g., 'button', 'card', 'nav')"
+          }
+        }
+      }
+    },
+    {
+      "name": "get_figma_component_by_name",
+      "description": "Get a Figma component by name.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "componentName": {
+            "type": "string",
+            "description": "Name of the Figma component to get"
+          }
+        }
+      }
+    },
+    {
+      "name": "create_figma_component",
+      "description": "Generate a React component from a Figma design and save it to the specified location. This is the main tool for converting Figma designs to code.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "componentName": {
+            "type": "string",
+            "description": "Name of the Figma component to generate (e.g., 'LoginButton', 'ProductCard', 'NavigationBar')"
+          },
+          "outputPath": {
+            "type": "string",
+            "description": "Directory path where the component should be created (e.g., 'src/components/', 'components/ui/')",
+            "default": "src/components/"
+          },
+          "typescript": {
+            "type": "boolean",
+            "description": "Generate TypeScript code with type definitions",
+            "default": true
+          },
+          "styling": {
+            "type": "string",
+            "enum": ["css", "scss", "styled-components", "tailwind", "emotion"],
+            "description": "Styling approach to use for the component",
+            "default": "css"
+          },
+          "componentNaming": {
+            "type": "string",
+            "enum": ["pascal", "camel", "kebab"],
+            "description": "Naming convention for the generated component",
+            "default": "pascal"
+          },
+          "createStorybook": {
+            "type": "boolean",
+            "description": "Generate Storybook story file for the component",
+            "default": false
+          },
+          "createTests": {
+            "type": "boolean",
+            "description": "Generate test file for the component",
+            "default": false
+          }
+        },
+        "required": ["componentName"]
+      }
+    },
+    {
+      "name": "preview_figma_component",
+      "description": "Preview the generated React code for a Figma component without creating files. Useful for reviewing before creating.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "componentName": {
+            "type": "string",
+            "description": "Name of the Figma component to preview"
+          },
+          "typescript": {
+            "type": "boolean",
+            "description": "Preview TypeScript code",
+            "default": true
+          },
+          "styling": {
+            "type": "string",
+            "enum": ["css", "scss", "styled-components", "tailwind", "emotion"],
+            "description": "Styling approach for preview",
+            "default": "css"
+          }
+        },
+        "required": ["componentName"]
+      }
+    },
+    {
+      "name": "search_figma_components",
+      "description": "Search for Figma components by name or partial match. Useful when you're not sure of the exact component name.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Search query (e.g., 'button', 'login', 'card')"
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Maximum number of results to return",
+            "default": 10,
+            "minimum": 1,
+            "maximum": 50
+          }
+        },
+        "required": ["query"]
+      }
+    },
+    {
+      "name": "extract_design_tokens",
+      "description": "Extract design tokens (colors, typography, spacing) from Figma components and generate CSS variables or design system files.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "componentName": {
+            "type": "string",
+            "description": "Name of the Figma component to extract tokens from, or 'all' for all components"
+          },
+          "outputPath": {
+            "type": "string",
+            "description": "Path where design tokens should be saved",
+            "default": "src/styles/"
+          },
+          "format": {
+            "type": "string",
+            "enum": ["css", "scss", "js", "json", "tailwind"],
+            "description": "Output format for design tokens",
+            "default": "css"
+          },
+          "tokenTypes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "colors",
+                "typography",
+                "spacing",
+                "shadows",
+                "borders",
+                "radii"
+              ]
+            },
+            "description": "Types of design tokens to extract",
+            "default": ["colors", "typography", "spacing"]
+          }
+        },
+        "required": ["componentName"]
+      }
+    },
+    {
+      "name": "create_component_library",
+      "description": "Generate multiple React components from Figma at once, creating a complete component library with consistent structure.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "componentNames": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "List of Figma component names to generate (e.g., ['Button', 'Card', 'Input'])"
+          },
+          "outputPath": {
+            "type": "string",
+            "description": "Base directory for the component library",
+            "default": "src/components/"
+          },
+          "typescript": {
+            "type": "boolean",
+            "description": "Generate TypeScript components",
+            "default": true
+          },
+          "styling": {
+            "type": "string",
+            "enum": ["css", "scss", "styled-components", "tailwind", "emotion"],
+            "description": "Consistent styling approach for all components",
+            "default": "css"
+          },
+          "createIndex": {
+            "type": "boolean",
+            "description": "Create index.ts file to export all components",
+            "default": true
+          },
+          "createStorybook": {
+            "type": "boolean",
+            "description": "Generate Storybook stories for all components",
+            "default": false
+          },
+          "extractTokens": {
+            "type": "boolean",
+            "description": "Extract and generate design tokens file",
+            "default": true
+          }
+        },
+        "required": ["componentNames"]
+      }
+    }
+  ]
+}

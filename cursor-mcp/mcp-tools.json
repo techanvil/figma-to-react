@@ -1,0 +1,51 @@
+{
+  "tools": [
+    {
+      "name": "list_figma_components",
+      "description": "List all available Figma components that can be generated into React code. Use this to see what components are available from the design team.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "search": {
+            "type": "string",
+            "description": "Optional search term to filter components (e.g., 'button', 'card', 'nav')"
+          }
+        }
+      }
+    },
+    {
+      "name": "get_figma_component_by_name",
+      "description": "Get a Figma component by name.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "componentName": {
+            "type": "string",
+            "description": "Name of the Figma component to get"
+          }
+        }
+      }
+    },
+    {
+      "name": "search_figma_components",
+      "description": "Search for Figma components by name or partial match. Useful when you're not sure of the exact component name.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Search query (e.g., 'button', 'login', 'card')"
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Maximum number of results to return",
+            "default": 10,
+            "minimum": 1,
+            "maximum": 50
+          }
+        },
+        "required": ["query"]
+      }
+    }
+  ]
+}

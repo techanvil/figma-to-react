@@ -1,0 +1,25 @@
+{
+  "name": "Figma to React Bridge",
+  "id": "figma-to-react-bridge",
+  "api": "1.0.0",
+  "main": "dist/code.js",
+  "ui": "ui.html",
+  "capabilities": [],
+  "enableProposedApi": false,
+  "editorType": ["figma", "figjam"],
+  "networkAccess": {
+    "allowedDomains": ["none"],
+    "devAllowedDomains": ["*"]
+  },
+  "permissions": ["currentuser"],
+  "menu": [
+    {
+      "name": "Send to React Bridge",
+      "command": "send-to-bridge"
+    },
+    {
+      "name": "Open Bridge Panel",
+      "command": "open-panel"
+    }
+  ]
+}
