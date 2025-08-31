@@ -1,5 +1,9 @@
 import logger from "@/utils/logger.js";
-import type { FigmaNode, TransformOptions, TransformedComponent } from "@/types/index.js";
+import type {
+  FigmaNode,
+  TransformOptions,
+  TransformedComponent,
+} from "@/types/index.js";
 
 /**
  * Transform Figma components to React component structure
@@ -58,6 +62,7 @@ class FigmaTransformer {
 
     logger.info("Component transformation completed", {
       totalComponents: components.length,
+      transformedComponents: transformedComponents,
       successfulTransformations: transformedComponents.filter(
         (c) => !(c as any).error
       ).length,

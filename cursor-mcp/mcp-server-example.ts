@@ -22,7 +22,9 @@ const FIGMA_BRIDGE_URL =
 const FIGMA_BRIDGE_API_KEY = process.env.FIGMA_BRIDGE_API_KEY || "";
 
 interface FigmaComponent {
-  name: string;
+  name: {
+    customName: string;
+  };
   originalName?: string;
   sessionId: string;
   componentId: string;
@@ -65,20 +67,47 @@ class FigmaBridgeMCPServer {
     // List available tools
     this.server.setRequestHandler(ListToolsRequestSchema, async () => ({
       tools: [
+        // {
+        //   name: "list_figma_components",
+        //   description:
+        //     "List all available Figma components that can be generated into React code",
+        //   inputSchema: {
+        //     type: "object",
+        //     properties: {
+        //       search: {
+        //         type: "string",
+        //         description: "Optional search term to filter components",
+        //       },
+        //     },
+        //   },
+        // },
         {
-          name: "list_figma_components",
-          description:
-            "List all available Figma components that can be generated into React code",
+          name: "get_figma_component_data",
+          description: "Get a Figma component's data",
           inputSchema: {
             type: "object",
             properties: {
-              search: {
+              componentName: {
                 type: "string",
-                description: "Optional search term to filter components",
+                description: "Name of the Figma component to get data for",
               },
             },
           },
         },
+        // {
+        //   name: "get_figma_component_by_name",
+        //   description: "Get a Figma component by name",
+        //   inputSchema: {
+        //     type: "object",
+        //     properties: {
+        //       componentName: {
+        //         type: "string",
+        //         description: "Name of the Figma component to get",
+        //       },
+        //     },
+        //   },
+        // },
+        /*
         {
           name: "create_figma_component",
           description:
@@ -165,27 +194,29 @@ class FigmaBridgeMCPServer {
             required: ["componentName"],
           },
         },
-        {
-          name: "search_figma_components",
-          description: "Search for Figma components by name or partial match",
-          inputSchema: {
-            type: "object",
-            properties: {
-              query: {
-                type: "string",
-                description: "Search query",
-              },
-              limit: {
-                type: "integer",
-                description: "Maximum number of results to return",
-                default: 10,
-                minimum: 1,
-                maximum: 50,
-              },
-            },
-            required: ["query"],
-          },
-        },
+        */
+        // {
+        //   name: "search_figma_components",
+        //   description: "Search for Figma components by name or partial match",
+        //   inputSchema: {
+        //     type: "object",
+        //     properties: {
+        //       query: {
+        //         type: "string",
+        //         description: "Search query",
+        //       },
+        //       limit: {
+        //         type: "integer",
+        //         description: "Maximum number of results to return",
+        //         default: 10,
+        //         minimum: 1,
+        //         maximum: 50,
+        //       },
+        //     },
+        //     required: ["query"],
+        //   },
+        // },
+        /*
         {
           name: "extract_design_tokens",
           description:
@@ -255,6 +286,7 @@ class FigmaBridgeMCPServer {
             required: ["componentNames"],
           },
         },
+        */
       ],
     }));
 
@@ -266,6 +298,12 @@ class FigmaBridgeMCPServer {
         switch (name) {
           case "list_figma_components":
             return await this.listFigmaComponents(args);
+
+          case "get_figma_component_data":
+            return await this.getFigmaComponentData(args);
+
+          case "get_figma_component_by_name":
+            return await this.getFigmaComponentByName(args);
 
           case "create_figma_component":
             return await this.createFigmaComponent(args);
@@ -321,13 +359,16 @@ class FigmaBridgeMCPServer {
       }
 
       const data = await response.json();
+      console.log(data.data.components);
       let components = data.data.components as FigmaComponent[];
 
       // Apply search filter if provided
       if (search) {
         components = components.filter(
           (comp) =>
-            comp.name.toLowerCase().includes(search.toLowerCase()) ||
+            comp.name.customName
+              ?.toLowerCase()
+              .includes(search.toLowerCase()) ||
             comp.originalName?.toLowerCase().includes(search.toLowerCase())
         );
       }
@@ -341,8 +382,9 @@ class FigmaBridgeMCPServer {
               components
                 .map(
                   (comp) =>
-                    `• **${comp.name}** ${
-                      comp.originalName && comp.originalName !== comp.name
+                    `• **${comp.name.customName}** ${
+                      comp.originalName &&
+                      comp.originalName !== comp.name.customName
                         ? `(${comp.originalName})`
                         : ""
                     }`
@@ -356,6 +398,58 @@ class FigmaBridgeMCPServer {
       throw new McpError(
         ErrorCode.InternalError,
         `Failed to list components: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    }
+  }
+
+  private async getFigmaComponentData(args: any) {
+    const { componentName } = args;
+    try {
+      // First get the component
+      const componentUrl = new URL(
+        `${FIGMA_BRIDGE_URL}/api/figma/components/by-name/${componentName}`
+      );
+      const componentResponse = await fetch(componentUrl, {
+        headers: { "X-API-Key": FIGMA_BRIDGE_API_KEY },
+      });
+
+      if (!componentResponse.ok) {
+        throw new Error(`Component not found: ${componentName}`);
+      }
+
+      const componentData = await componentResponse.json();
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(componentData.data, null, 2),
+            // text: "Testing",
+          },
+        ],
+      };
+    } catch (error: any) {
+      throw new McpError(
+        ErrorCode.InternalError,
+        `Failed to get component data: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    }
+  }
+
+  private async getFigmaComponentByName(args: any) {
+    const { componentName } = args;
+    try {
+      const components = await this.listFigmaComponents({
+        search: componentName,
+      });
+      return components.content[0];
+    } catch (error: any) {
+      throw new McpError(
+        ErrorCode.InternalError,
+        `Failed to get component: ${
           error instanceof Error ? error.message : String(error)
         }`
       );
@@ -405,6 +499,10 @@ class FigmaBridgeMCPServer {
       const fileExtension = typescript ? "tsx" : "jsx";
       const componentFileName = `${generatedCode.componentName}.${fileExtension}`;
       const componentFilePath = path.join(outputPath, componentFileName);
+
+      if (!generatedCode.code) {
+        throw new Error("Failed to generate code");
+      }
 
       // Write main component file
       await fs.writeFile(componentFilePath, generatedCode.code.component);
@@ -595,10 +693,10 @@ class FigmaBridgeMCPServer {
         results
           .map(
             (result: any, index: number) =>
-              `${index + 1}. **${result.customName || result.originalName}** (${
-                result.matchType
-              } match)\n` +
-              `   • Original name: ${result.originalName}\n` +
+              `${index + 1}. **${
+                result.component.customName || result.component.originalName
+              }** (${result.matchType} match)\n` +
+              `   • Original name: ${result.component.originalName}\n` +
               `   • Session: ${result.sessionId}\n`
           )
           .join("\n");

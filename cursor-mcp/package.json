@@ -9,8 +9,10 @@
   },
   "scripts": {
     "build": "tsc",
+    "build:watch": "tsc --watch",
     "start": "node dist/mcp-server-example.js",
     "dev": "tsx mcp-server-example.ts",
+    "dev:watch": "tsx mcp-server-example.ts --watch",
     "clean": "rm -rf dist",
     "rebuild": "npm run clean && npm run build"
   },

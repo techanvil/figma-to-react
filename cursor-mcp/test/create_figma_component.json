@@ -1,0 +1,14 @@
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "tools/call",
+  "params": {
+    "name": "create_figma_component",
+    "arguments": {
+        "componentName": "WelcomeModal",
+        "outputPath": "src/",
+        "typescript": true,
+        "styling": "styled-components"
+    }
+  }
+}

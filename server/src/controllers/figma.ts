@@ -676,6 +676,13 @@ export const generateComponentCode = async (
       return;
     }
 
+    // logger.info("Generating component code!", {
+    //   name,
+    // });
+    // console.log("Generating component code", {
+    //   name,
+    // });
+
     // Search for component by custom name
     const searchResults = componentNameIndex.searchByCustomName(name);
 
